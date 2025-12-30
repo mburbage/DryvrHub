@@ -1,44 +1,64 @@
 /**
- * Sample React Native App
- * https://github.com/facebook/react-native
+ * DryverHub - Ride Marketplace App
+ * Driver-first, zero-commission model
  *
  * @format
  */
 
-import { NewAppScreen } from '@react-native/new-app-screen';
-import { StatusBar, StyleSheet, useColorScheme, View } from 'react-native';
-import {
-  SafeAreaProvider,
-  useSafeAreaInsets,
-} from 'react-native-safe-area-context';
+import React from 'react';
+import {NavigationContainer} from '@react-navigation/native';
+import {SafeAreaProvider} from 'react-native-safe-area-context';
+import {ActivityIndicator, View, StyleSheet, StatusBar} from 'react-native';
+import {RoleProvider, useRole} from './src/contexts/RoleContext';
+import {DataProvider} from './src/contexts/DataContext';
+import {SettingsProvider} from './src/contexts/SettingsContext';
+import RoleSelectionScreen from './src/screens/RoleSelectionScreen';
+import RiderNavigator from './src/navigation/RiderNavigator';
+import DriverNavigator from './src/navigation/DriverNavigator';
 
-function App() {
-  const isDarkMode = useColorScheme() === 'dark';
+function AppContent() {
+  const {role, isLoading} = useRole();
+
+  if (isLoading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#007AFF" />
+      </View>
+    );
+  }
+
+  if (!role) {
+    return <RoleSelectionScreen />;
+  }
 
   return (
+    <NavigationContainer>
+      {role === 'RIDER' ? <RiderNavigator /> : <DriverNavigator />}
+    </NavigationContainer>
+  );
+}
+
+function App() {
+  return (
     <SafeAreaProvider>
-      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
-      <AppContent />
+      <StatusBar barStyle="dark-content" />
+      <RoleProvider>
+        <SettingsProvider>
+          <DataProvider>
+            <AppContent />
+          </DataProvider>
+        </SettingsProvider>
+      </RoleProvider>
     </SafeAreaProvider>
   );
 }
 
-function AppContent() {
-  const safeAreaInsets = useSafeAreaInsets();
-
-  return (
-    <View style={styles.container}>
-      <NewAppScreen
-        templateFileName="App.tsx"
-        safeAreaInsets={safeAreaInsets}
-      />
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
-  container: {
+  loadingContainer: {
     flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#fff',
   },
 });
 
