@@ -29,6 +29,7 @@ interface DataContextType {
   createBid: (bid: Omit<Bid, 'id' | 'createdAt'>) => Bid;
   getBidsByRide: (rideId: string) => Bid[];
   getBidsByDriver: (driverId: string) => Bid[];
+  deleteBid: (bidId: string) => void;
 
   // Expiry
   expireStaleRides: () => void;
@@ -236,6 +237,10 @@ export const DataProvider = ({children}: {children: ReactNode}) => {
     return bids.filter(bid => bid.driverId === driverId);
   };
 
+  const deleteBid = (bidId: string) => {
+    setBids(prev => prev.filter(bid => bid.id !== bidId));
+  };
+
   const expireStaleRides = () => {
     setRides(prev =>
       prev.map(ride => {
@@ -309,6 +314,7 @@ export const DataProvider = ({children}: {children: ReactNode}) => {
         createBid,
         getBidsByRide,
         getBidsByDriver,
+        deleteBid,
         expireStaleRides,
         getCurrentUser,
         getRiderProfile,

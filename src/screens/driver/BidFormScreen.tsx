@@ -18,7 +18,7 @@ import {calculateDistance, Coordinates} from '../../utils/distance';
 
 const BidFormScreen = ({route, navigation}: any) => {
   const {rideId} = route.params;
-  const {getRideById, createBid, getBidsByRide, getCurrentUser} = useData();
+  const {getRideById, createBid, getBidsByRide, getCurrentUser, deleteBid} = useData();
   const {userSettings} = useSettings();
   const ride = getRideById(rideId);
   const currentUser = getCurrentUser();
@@ -137,6 +137,11 @@ const BidFormScreen = ({route, navigation}: any) => {
     setIsSubmitting(true);
 
     try {
+      // If updating existing bid, delete the old one first
+      if (driverBid) {
+        deleteBid(driverBid.id);
+      }
+
       createBid({
         rideId: ride.id,
         driverId: currentUser.id,
@@ -160,6 +165,31 @@ const BidFormScreen = ({route, navigation}: any) => {
     }
   };
 
+  const handleRemoveBid = () => {
+    if (!driverBid) return;
+
+    Alert.alert(
+      'Remove Bid',
+      'Are you sure you want to remove your bid?',
+      [
+        {text: 'Cancel', style: 'cancel'},
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: () => {
+            deleteBid(driverBid.id);
+            Alert.alert('Removed', 'Your bid has been removed.', [
+              {
+                text: 'OK',
+                onPress: () => navigation.navigate('RideBoardList'),
+              },
+            ]);
+          },
+        },
+      ],
+    );
+  };
+
   return (
     <ScrollView style={styles.container} keyboardShouldPersistTaps="handled">
       <View style={styles.content}>
@@ -177,6 +207,11 @@ const BidFormScreen = ({route, navigation}: any) => {
             <Text style={styles.existingBidNote}>
               Submitting again will replace your previous bid
             </Text>
+            <TouchableOpacity
+              style={styles.removeBidButton}
+              onPress={handleRemoveBid}>
+              <Text style={styles.removeBidButtonText}>Remove Bid</Text>
+            </TouchableOpacity>
           </View>
         )}
         
@@ -395,7 +430,20 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#666',
     marginTop: 8,
+    marginBottom: 12,
     fontStyle: 'italic',
+  },
+  removeBidButton: {
+    backgroundColor: '#FF3B30',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 6,
+    alignItems: 'center',
+  },
+  removeBidButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });
 
