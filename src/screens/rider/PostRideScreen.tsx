@@ -20,6 +20,8 @@ const PostRideScreen = ({navigation}: any) => {
   const {createRide} = useData();
   const [pickupAddress, setPickupAddress] = useState('');
   const [dropoffAddress, setDropoffAddress] = useState('');
+  const [pickupTime, setPickupTime] = useState('');
+  const [estimatedDuration, setEstimatedDuration] = useState('');
   const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [riderLocation, setRiderLocation] = useState<Coordinates | null>(null);
@@ -90,6 +92,16 @@ const PostRideScreen = ({navigation}: any) => {
       return;
     }
 
+    if (!pickupTime.trim()) {
+      Alert.alert('Missing Information', 'Please enter pickup time (e.g., "2:30 PM" or "14:30").');
+      return;
+    }
+
+    if (!estimatedDuration.trim() || isNaN(parseFloat(estimatedDuration))) {
+      Alert.alert('Invalid Duration', 'Please enter estimated duration in minutes.');
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
@@ -107,6 +119,14 @@ const PostRideScreen = ({navigation}: any) => {
           dropoffAddress.trim(),
         );
 
+      // Parse pickup time (simple parse - in production would use date picker)
+      const pickupDateTime = new Date();
+      // Set to today + parsed time (simplified - just add hours for demo)
+      const hoursMatch = pickupTime.match(/(\d+)/);
+      if (hoursMatch) {
+        pickupDateTime.setHours(parseInt(hoursMatch[1], 10));
+      }
+
       // Mock rider ID - will come from auth later
       const riderId = 'rider_001';
 
@@ -117,6 +137,8 @@ const PostRideScreen = ({navigation}: any) => {
         pickupCoordinates,
         dropoffCoordinates,
         distanceKm,
+        pickupTime: pickupDateTime,
+        estimatedDuration: parseFloat(estimatedDuration),
         notes: notes.trim() || undefined,
         status: 'OPEN',
       });
@@ -128,6 +150,8 @@ const PostRideScreen = ({navigation}: any) => {
             // Clear form
             setPickupAddress('');
             setDropoffAddress('');
+            setPickupTime('');
+            setEstimatedDuration('');
             setNotes('');
             setRiderLocation(null);
             // Navigate back to ride board
@@ -190,6 +214,35 @@ const PostRideScreen = ({navigation}: any) => {
             autoCapitalize="words"
             editable={!isSubmitting}
           />
+        </View>
+
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Pickup Time</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="e.g., 2:30 PM or 14:30"
+            value={pickupTime}
+            onChangeText={setPickupTime}
+            editable={!isSubmitting}
+          />
+          <Text style={styles.hint}>
+            When you need to be picked up
+          </Text>
+        </View>
+
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Estimated Duration (minutes)</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="e.g., 45"
+            value={estimatedDuration}
+            onChangeText={setEstimatedDuration}
+            keyboardType="numeric"
+            editable={!isSubmitting}
+          />
+          <Text style={styles.hint}>
+            Approximate trip duration
+          </Text>
         </View>
 
         <View style={styles.inputGroup}>
@@ -290,6 +343,11 @@ const styles = StyleSheet.create({
     padding: 12,
     fontSize: 16,
     backgroundColor: '#fff',
+  },
+  hint: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 6,
   },
   textArea: {
     minHeight: 100,

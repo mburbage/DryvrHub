@@ -24,6 +24,7 @@ const DriverRideBoardScreen = ({navigation}: any) => {
 
   const renderRideItem = ({item}: {item: Ride}) => {
     const timeAgo = getTimeAgo(new Date(item.createdAt));
+    const pickupTimeStr = formatTime(new Date(item.pickupTime));
     
     // Calculate estimated price based on user's trip rate
     const estimatedPrice = userSettings.driver.tripMileRate > 0
@@ -50,7 +51,8 @@ const DriverRideBoardScreen = ({navigation}: any) => {
           )}
           <Text style={styles.rideTime}>{timeAgo}</Text>
         </View>
-        <Text style={styles.rideDistance}>{item.distanceKm} km trip</Text>
+        <Text style={styles.rideDistance}>{item.distanceKm} km trip • {item.estimatedDuration} min</Text>
+        <Text style={styles.pickupTime}>Pickup: {pickupTimeStr}</Text>
         <Text style={styles.rideLocation}>From: {item.pickupAddress}</Text>
         <Text style={styles.rideLocation}>To: {item.dropoffAddress}</Text>
         {item.notes && (
@@ -98,6 +100,15 @@ function getTimeAgo(date: Date): string {
   if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
   if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
   return `${Math.floor(seconds / 86400)}d ago`;
+}
+
+function formatTime(date: Date): string {
+  const hours = date.getHours();
+  const minutes = date.getMinutes();
+  const ampm = hours >= 12 ? 'PM' : 'AM';
+  const displayHours = hours % 12 || 12;
+  const displayMinutes = minutes < 10 ? `0${minutes}` : minutes;
+  return `${displayHours}:${displayMinutes} ${ampm}`;
 }
 
 const styles = StyleSheet.create({
@@ -162,6 +173,12 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: '#666',
     marginBottom: 4,
+  },
+  pickupTime: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#007AFF',
+    marginBottom: 8,
   },
   estimatedPrice: {
     fontSize: 24,

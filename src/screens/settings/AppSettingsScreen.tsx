@@ -11,11 +11,13 @@ import {
 } from 'react-native';
 import {useSettings} from '../../contexts/SettingsContext';
 import {useRole} from '../../contexts/RoleContext';
+import {useData} from '../../contexts/DataContext';
 import {DarkMode} from '../../shared/settingsTypes';
 
 const AppSettingsScreen = () => {
   const {appSettings, updateAppSettings} = useSettings();
   const {setRole} = useRole();
+  const {resetAllData} = useData();
 
   const handleDarkModeChange = (mode: DarkMode) => {
     updateAppSettings({darkMode: mode});
@@ -33,6 +35,28 @@ const AppSettingsScreen = () => {
           onPress: async () => {
             await setRole(null);
             // User will be redirected to role selection by navigation
+          },
+        },
+      ],
+    );
+  };
+
+  const handleResetData = () => {
+    Alert.alert(
+      'Reset App Data',
+      'This will clear all rides, bids, and blocked users, and reload fresh demo data. Continue?',
+      [
+        {text: 'Cancel', style: 'cancel'},
+        {
+          text: 'Reset',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await resetAllData();
+              Alert.alert('Success', 'App data has been reset with fresh demo data.');
+            } catch (error) {
+              Alert.alert('Error', 'Failed to reset data. Please try again.');
+            }
           },
         },
       ],
@@ -108,6 +132,16 @@ const AppSettingsScreen = () => {
           <Text style={styles.label}>App Version</Text>
           <Text style={styles.value}>1.0.0</Text>
         </View>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Development</Text>
+        <TouchableOpacity style={styles.resetButton} onPress={handleResetData}>
+          <Text style={styles.resetButtonText}>Reset App Data</Text>
+        </TouchableOpacity>
+        <Text style={styles.resetHint}>
+          Clear all data and reload fresh demo rides
+        </Text>
       </View>
 
       <View style={styles.section}>
@@ -194,6 +228,23 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  resetButton: {
+    backgroundColor: '#FF9500',
+    padding: 14,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  resetButtonText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  resetHint: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 8,
+    textAlign: 'center',
   },
 });
 

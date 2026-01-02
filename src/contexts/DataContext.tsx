@@ -45,6 +45,9 @@ interface DataContextType {
   isUserBlocked: (userId: string) => boolean;
   getBlockedUsers: () => string[];
   reportUser: (userId: string, reason: string) => void;
+
+  // Development
+  resetAllData: () => Promise<void>;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -301,6 +304,30 @@ export const DataProvider = ({children}: {children: ReactNode}) => {
     // In production, this would send to moderation system
   };
 
+  const resetAllData = async () => {
+    try {
+      // Clear AsyncStorage
+      await Promise.all([
+        AsyncStorage.removeItem(RIDES_STORAGE_KEY),
+        AsyncStorage.removeItem(BIDS_STORAGE_KEY),
+        AsyncStorage.removeItem(BLOCKED_USERS_STORAGE_KEY),
+      ]);
+      
+      // Reset state to fresh sample data
+      const freshRides = generateSampleRides();
+      const freshBids = generateSampleBids(freshRides);
+      setRides(freshRides);
+      setBids(freshBids);
+      setBlockedUsers(new Set());
+      setReports([]);
+      
+      console.log('All data reset to sample data');
+    } catch (error) {
+      console.error('Failed to reset data:', error);
+      throw error;
+    }
+  };
+
   return (
     <DataContext.Provider
       value={{
@@ -324,6 +351,7 @@ export const DataProvider = ({children}: {children: ReactNode}) => {
         isUserBlocked,
         getBlockedUsers,
         reportUser,
+        resetAllData,
       }}>
       {children}
     </DataContext.Provider>

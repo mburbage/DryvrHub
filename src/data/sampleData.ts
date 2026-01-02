@@ -79,13 +79,18 @@ export const generateSampleRides = (): Ride[] => {
     while (dropoffIdx === pickupIdx) {
       dropoffIdx = Math.floor(Math.random() * SAMPLE_ADDRESSES.length);
     }
+    const distanceKm = Math.round((Math.random() * 15 + 5) * 10) / 10; // 5-20 km
+    const pickupTime = new Date(now.getTime() + Math.random() * 8 * 60 * 60 * 1000); // 0-8 hours from now
+    const estimatedDuration = Math.round((distanceKm / 0.5) + (Math.random() * 10)); // ~2 km per minute + variation
 
     rides.push({
       id: `ride_open_${i}`,
       riderId: i === 0 ? 'user_001' : SAMPLE_USERS[i % 4].id,
       pickupAddress: SAMPLE_ADDRESSES[pickupIdx],
       dropoffAddress: SAMPLE_ADDRESSES[dropoffIdx],
-      distanceKm: Math.round((Math.random() * 15 + 5) * 10) / 10, // 5-20 km
+      distanceKm,
+      pickupTime,
+      estimatedDuration,
       notes: i % 2 === 0 ? 'Please call when you arrive' : undefined,
       status: 'OPEN',
       createdAt,
@@ -102,13 +107,18 @@ export const generateSampleRides = (): Ride[] => {
     while (dropoffIdx === pickupIdx) {
       dropoffIdx = Math.floor(Math.random() * SAMPLE_ADDRESSES.length);
     }
+    const distanceKm = Math.round((Math.random() * 15 + 5) * 10) / 10;
+    const pickupTime = new Date(now.getTime() + Math.random() * 4 * 60 * 60 * 1000); // 0-4 hours from now
+    const estimatedDuration = Math.round((distanceKm / 0.5) + (Math.random() * 10));
 
     rides.push({
       id: `ride_accepted_${i}`,
       riderId: 'user_001',
       pickupAddress: SAMPLE_ADDRESSES[pickupIdx],
       dropoffAddress: SAMPLE_ADDRESSES[dropoffIdx],
-      distanceKm: Math.round((Math.random() * 15 + 5) * 10) / 10,
+      distanceKm,
+      pickupTime,
+      estimatedDuration,
       notes: 'Heading to the airport',
       status: 'ACCEPTED',
       createdAt,
@@ -128,13 +138,18 @@ export const generateSampleRides = (): Ride[] => {
     while (dropoffIdx === pickupIdx) {
       dropoffIdx = Math.floor(Math.random() * SAMPLE_ADDRESSES.length);
     }
+    const distanceKm = Math.round((Math.random() * 15 + 5) * 10) / 10;
+    const pickupTime = new Date(createdAt.getTime() + Math.random() * 4 * 60 * 60 * 1000); // Past pickup time
+    const estimatedDuration = Math.round((distanceKm / 0.5) + (Math.random() * 10));
 
     rides.push({
       id: `ride_completed_${i}`,
       riderId: i % 2 === 0 ? 'user_001' : 'user_002',
       pickupAddress: SAMPLE_ADDRESSES[pickupIdx],
       dropoffAddress: SAMPLE_ADDRESSES[dropoffIdx],
-      distanceKm: Math.round((Math.random() * 15 + 5) * 10) / 10,
+      distanceKm,
+      pickupTime,
+      estimatedDuration,
       status: 'COMPLETED',
       createdAt,
       expiresAt: new Date(createdAt.getTime() + 24 * 60 * 60 * 1000),

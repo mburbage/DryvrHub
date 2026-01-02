@@ -30,6 +30,8 @@ export interface Ride {
   pickupCoordinates?: {lat: number; lng: number}; // For distance calculation only
   dropoffCoordinates?: {lat: number; lng: number}; // For distance calculation only
   distanceKm: number; // Calculated once at creation, never updated
+  pickupTime: Date; // When rider needs to be picked up
+  estimatedDuration: number; // Estimated trip duration in minutes
   notes?: string;
   status: RideStatus;
   createdAt: Date;

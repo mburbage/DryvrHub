@@ -60,11 +60,28 @@ const RideDetailsScreen = ({route, navigation}: any) => {
 
   const isBlocked = isUserBlocked(ride.riderId);
 
+  const formatTime = (date: Date): string => {
+    const hours = date.getHours();
+    const minutes = date.getMinutes();
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    const displayHours = hours % 12 || 12;
+    const displayMinutes = minutes < 10 ? `0${minutes}` : minutes;
+    return `${displayHours}:${displayMinutes} ${ampm}`;
+  };
+
   return (
     <ScrollView style={styles.container}>
       <View style={styles.content}>
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Trip Details</Text>
+          <View style={styles.infoRow}>
+            <Text style={styles.label}>Pickup Time</Text>
+            <Text style={styles.value}>{formatTime(new Date(ride.pickupTime))}</Text>
+          </View>
+          <View style={styles.infoRow}>
+            <Text style={styles.label}>Estimated Duration</Text>
+            <Text style={styles.value}>{ride.estimatedDuration} minutes</Text>
+          </View>
           <View style={styles.infoRow}>
             <Text style={styles.label}>Distance</Text>
             <Text style={styles.value}>{ride.distanceKm} km</Text>
