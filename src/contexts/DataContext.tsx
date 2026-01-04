@@ -1,35 +1,32 @@
 import React, {createContext, useContext, useState, useEffect, ReactNode} from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {Ride, Bid, User, RiderProfile, DriverProfile} from '../models';
-import {
-  validateStateTransition,
-  shouldExpireRide,
-} from '../utils/rideStateMachine';
-import {generateSampleRides, generateSampleBids} from '../data/sampleData';
+import {tripsApi, bidsApi, ridersApi, driversApi, messagesApi, reportsApi} from '../services/api';
 
-const RIDES_STORAGE_KEY = '@dryverhub_rides';
-const BIDS_STORAGE_KEY = '@dryverhub_bids';
 const BLOCKED_USERS_STORAGE_KEY = '@dryverhub_blocked_users';
+const CURRENT_USER_ID_KEY = '@dryverhub_current_user_id';
 
 interface DataContextType {
   // Rides
   rides: Ride[];
-  createRide: (ride: Omit<Ride, 'id' | 'createdAt' | 'expiresAt'>) => Ride;
+  createRide: (ride: Omit<Ride, 'id' | 'createdAt' | 'expiresAt'>) => Promise<Ride>;
   updateRideStatus: (
     rideId: string,
     newStatus: Ride['status'],
     acceptedBidId?: string,
-  ) => void;
+  ) => Promise<void>;
   getRideById: (rideId: string) => Ride | undefined;
   getRidesByRider: (riderId: string) => Ride[];
   getOpenRides: () => Ride[];
+  refreshRides: () => Promise<void>;
 
   // Bids
   bids: Bid[];
-  createBid: (bid: Omit<Bid, 'id' | 'createdAt'>) => Bid;
+  createBid: (bid: Omit<Bid, 'id' | 'createdAt'>) => Promise<Bid>;
   getBidsByRide: (rideId: string) => Bid[];
   getBidsByDriver: (driverId: string) => Bid[];
-  deleteBid: (bidId: string) => void;
+  deleteBid: (bidId: string) => Promise<void>;
+  refreshBids: () => Promise<void>;
 
   // Expiry
   expireStaleRides: () => void;
@@ -38,42 +35,42 @@ interface DataContextType {
   getCurrentUser: () => User;
   getRiderProfile: (userId: string) => RiderProfile | undefined;
   getDriverProfile: (userId: string) => DriverProfile | undefined;
-  updateDriverProfile: (userId: string, vehicle: DriverProfile['vehicle']) => void;
+  updateDriverProfile: (userId: string, vehicle: DriverProfile['vehicle']) => Promise<void>;
 
   // Safety
   blockUser: (userId: string) => void;
   unblockUser: (userId: string) => void;
   isUserBlocked: (userId: string) => boolean;
   getBlockedUsers: () => string[];
-  reportUser: (userId: string, reason: string) => void;
+  reportUser: (userId: string, reason: string) => Promise<void>;
 
   // Development
   resetAllData: () => Promise<void>;
+
+  // Loading state
+  isLoading: boolean;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
-// Default expiry: 24 hours from creation
-const DEFAULT_EXPIRY_HOURS = 24;
-
 // Mock current user - will be replaced with real auth later
+// Using one of the test rider IDs from the database seed
 const MOCK_USER: User = {
-  id: 'user_001',
-  email: 'user@dryverhub.com',
-  phoneNumber: '+1234567890',
-  createdAt: new Date('2024-12-01'), // ~1 month old account
+  id: '11111111-1111-1111-1111-111111111111', // rider_1 from seed data
+  email: 'rider1@example.com',
+  phoneNumber: '+19195551001',
+  createdAt: new Date('2024-12-01'),
   isVerified: true,
 };
 
 const MOCK_RIDER_PROFILE: RiderProfile = {
-  userId: 'user_001',
-  completedRidesCount: 12, // Private only
+  userId: '11111111-1111-1111-1111-111111111111',
+  completedRidesCount: 0, // Will track from API later
 };
 
 const MOCK_DRIVER_PROFILE: DriverProfile = {
-  userId: 'user_001',
-  completedRidesCount: 47, // Private only
-  // Verification fields - all start as not completed
+  userId: '11111111-1111-1111-1111-111111111111',
+  completedRidesCount: 0,
   identityVerified: false,
   backgroundCheckStatus: 'not_completed',
   vehicleVerified: false,
@@ -87,136 +84,194 @@ const MOCK_DRIVER_PROFILE: DriverProfile = {
   },
 };
 
-// Generate initial sample data once
-const INITIAL_SAMPLE_RIDES = generateSampleRides();
-const INITIAL_SAMPLE_BIDS = generateSampleBids(INITIAL_SAMPLE_RIDES);
+// Helper function to convert API trip format to app Ride format
+function convertApiTripToRide(apiTrip: any): Ride {
+  // Convert miles to km (1 mile = 1.60934 km)
+  const distanceKm = apiTrip.estimated_distance_miles 
+    ? parseFloat(apiTrip.estimated_distance_miles) * 1.60934 
+    : 0;
+
+  return {
+    id: apiTrip.id,
+    riderId: apiTrip.rider_id,
+    pickupAddress: apiTrip.pickup_address,
+    dropoffAddress: apiTrip.dropoff_address,
+    pickupCoordinates: {
+      lat: parseFloat(apiTrip.pickup_lat),
+      lng: parseFloat(apiTrip.pickup_lng),
+    },
+    dropoffCoordinates: {
+      lat: parseFloat(apiTrip.dropoff_lat),
+      lng: parseFloat(apiTrip.dropoff_lng),
+    },
+    distanceKm: parseFloat(distanceKm.toFixed(2)),
+    pickupTime: new Date(apiTrip.scheduled_pickup_time),
+    estimatedDuration: apiTrip.estimated_duration_minutes || 0,
+    notes: apiTrip.notes,
+    status: apiTrip.status.toUpperCase() as Ride['status'],
+    createdAt: new Date(apiTrip.created_at),
+    expiresAt: new Date(apiTrip.expires_at),
+  };
+}
+
+// Helper function to convert app Ride format to API trip format
+function convertRideToApiTrip(ride: Omit<Ride, 'id' | 'createdAt' | 'expiresAt'>) {
+  // Convert km back to miles for the API (1 km = 0.621371 miles)
+  const distanceMiles = ride.distanceKm * 0.621371;
+  
+  return {
+    rider_id: ride.riderId,
+    pickup_address: ride.pickupAddress,
+    dropoff_address: ride.dropoffAddress,
+    pickup_lat: ride.pickupCoordinates?.lat || 0,
+    pickup_lng: ride.pickupCoordinates?.lng || 0,
+    dropoff_lat: ride.dropoffCoordinates?.lat || 0,
+    dropoff_lng: ride.dropoffCoordinates?.lng || 0,
+    estimated_distance_miles: parseFloat(distanceMiles.toFixed(2)),
+    estimated_duration_minutes: ride.estimatedDuration,
+    scheduled_pickup_time: ride.pickupTime.toISOString(),
+    notes: ride.notes,
+  };
+}
+
+// Helper function to convert API bid format to app Bid format
+function convertApiBidToBid(apiBid: any): Bid {
+  return {
+    id: apiBid.id,
+    rideId: apiBid.trip_id,
+    driverId: apiBid.driver_id,
+    priceAmount: parseFloat(apiBid.bid_amount),
+    message: apiBid.message,
+    status: apiBid.status.toUpperCase() as Bid['status'],
+    createdAt: new Date(apiBid.created_at),
+  };
+}
+
+// Helper function to convert app Bid format to API bid format
+function convertBidToApiBid(bid: Omit<Bid, 'id' | 'createdAt'>) {
+  return {
+    trip_id: bid.rideId,
+    driver_id: bid.driverId,
+    bid_amount: bid.priceAmount,
+    message: bid.message,
+  };
+}
 
 export const DataProvider = ({children}: {children: ReactNode}) => {
-  // Initialize with empty data, will load from storage
   const [rides, setRides] = useState<Ride[]>([]);
   const [bids, setBids] = useState<Bid[]>([]);
   const [blockedUsers, setBlockedUsers] = useState<Set<string>>(new Set());
   const [reports, setReports] = useState<Array<{userId: string; reason: string; timestamp: Date}>>([]);
-  const [isLoaded, setIsLoaded] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [driverProfile, setDriverProfile] = useState<DriverProfile>(MOCK_DRIVER_PROFILE);
 
+  // Load initial data from API
   const loadData = async () => {
     try {
-      const [ridesData, bidsData, blockedData] = await Promise.all([
-        AsyncStorage.getItem(RIDES_STORAGE_KEY),
-        AsyncStorage.getItem(BIDS_STORAGE_KEY),
-        AsyncStorage.getItem(BLOCKED_USERS_STORAGE_KEY),
-      ]);
-
-      if (ridesData && bidsData) {
-        // Load existing data
-        const parsedRides = JSON.parse(ridesData, (key, value) => {
-          // Revive Date objects
-          if (key === 'createdAt' || key === 'expiresAt' || key === 'acceptedAt' || key === 'completedAt') {
-            return value ? new Date(value) : undefined;
-          }
-          return value;
-        });
-        const parsedBids = JSON.parse(bidsData, (key, value) => {
-          if (key === 'createdAt') {
-            return new Date(value);
-          }
-          return value;
-        });
-        setRides(parsedRides);
-        setBids(parsedBids);
-      } else {
-        // First launch: load sample data
-        setRides(INITIAL_SAMPLE_RIDES);
-        setBids(INITIAL_SAMPLE_BIDS);
-      }
-
+      setIsLoading(true);
+      
+      // Load blocked users from local storage
+      const blockedData = await AsyncStorage.getItem(BLOCKED_USERS_STORAGE_KEY);
       if (blockedData) {
         setBlockedUsers(new Set(JSON.parse(blockedData)));
       }
 
-      setIsLoaded(true);
-    } catch (error) {
-      console.error('Failed to load data:', error);
-      // Fallback to sample data
-      setRides(INITIAL_SAMPLE_RIDES);
-      setBids(INITIAL_SAMPLE_BIDS);
-      setIsLoaded(true);
-    }
-  };
-
-  const saveData = async () => {
-    try {
-      await Promise.all([
-        AsyncStorage.setItem(RIDES_STORAGE_KEY, JSON.stringify(rides)),
-        AsyncStorage.setItem(BIDS_STORAGE_KEY, JSON.stringify(bids)),
-        AsyncStorage.setItem(BLOCKED_USERS_STORAGE_KEY, JSON.stringify(Array.from(blockedUsers))),
+      // Fetch trips and bids from API
+      const [apiTrips, apiBids] = await Promise.all([
+        tripsApi.getAll(),
+        bidsApi.getAll(),
       ]);
+
+      const convertedRides = apiTrips.map(convertApiTripToRide);
+      const convertedBids = apiBids.map(convertApiBidToBid);
+
+      setRides(convertedRides);
+      setBids(convertedBids);
     } catch (error) {
-      console.error('Failed to save data:', error);
+      console.error('Failed to load data from API:', error);
+      // Could fallback to cached data here
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  // Load data from AsyncStorage on mount
+  // Load data on mount
   useEffect(() => {
     loadData();
   }, []);
 
-  // Save data to AsyncStorage whenever it changes
+  // Save blocked users whenever it changes
   useEffect(() => {
-    if (isLoaded) {
-      saveData();
+    AsyncStorage.setItem(BLOCKED_USERS_STORAGE_KEY, JSON.stringify(Array.from(blockedUsers)));
+  }, [blockedUsers]);
+
+  const refreshRides = async () => {
+    try {
+      const apiTrips = await tripsApi.getAll();
+      const convertedRides = apiTrips.map(convertApiTripToRide);
+      setRides(convertedRides);
+    } catch (error) {
+      console.error('Failed to refresh rides:', error);
     }
-  }, [rides, bids, blockedUsers, isLoaded]);
-
-  const createRide = (
-    ride: Omit<Ride, 'id' | 'createdAt' | 'expiresAt'>,
-  ): Ride => {
-    const now = new Date();
-    const expiresAt = new Date(
-      now.getTime() + DEFAULT_EXPIRY_HOURS * 60 * 60 * 1000,
-    );
-
-    const newRide: Ride = {
-      ...ride,
-      id: `ride_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      createdAt: now,
-      expiresAt,
-      status: 'OPEN',
-    };
-
-    setRides(prev => [...prev, newRide]);
-    return newRide;
   };
 
-  const updateRideStatus = (
+  const refreshBids = async () => {
+    try {
+      const apiBids = await bidsApi.getAll();
+      const convertedBids = apiBids.map(convertApiBidToBid);
+      setBids(convertedBids);
+    } catch (error) {
+      console.error('Failed to refresh bids:', error);
+    }
+  };
+
+  const createRide = async (
+    ride: Omit<Ride, 'id' | 'createdAt' | 'expiresAt'>,
+  ): Promise<Ride> => {
+    try {
+      const apiTrip = await tripsApi.create(convertRideToApiTrip(ride));
+      const newRide = convertApiTripToRide(apiTrip);
+      setRides(prev => [...prev, newRide]);
+      return newRide;
+    } catch (error) {
+      console.error('Failed to create ride:', error);
+      throw error;
+    }
+  };
+
+  const updateRideStatus = async (
     rideId: string,
     newStatus: Ride['status'],
     acceptedBidId?: string,
   ) => {
-    setRides(prev =>
-      prev.map(ride => {
-        if (ride.id !== rideId) {
-          return ride;
-        }
+    try {
+      await tripsApi.updateStatus(rideId, newStatus.toLowerCase() as any);
+      
+      // Update local state
+      setRides(prev =>
+        prev.map(ride => {
+          if (ride.id !== rideId) {
+            return ride;
+          }
 
-        // Validate state transition
-        validateStateTransition(ride.status, newStatus);
+          const updates: Partial<Ride> = {status: newStatus};
 
-        const updates: Partial<Ride> = {status: newStatus};
+          if (newStatus === 'ACCEPTED' && acceptedBidId) {
+            updates.acceptedBidId = acceptedBidId;
+            updates.acceptedAt = new Date();
+          }
 
-        if (newStatus === 'ACCEPTED' && acceptedBidId) {
-          updates.acceptedBidId = acceptedBidId;
-          updates.acceptedAt = new Date();
-        }
+          if (newStatus === 'COMPLETED') {
+            updates.completedAt = new Date();
+          }
 
-        if (newStatus === 'COMPLETED') {
-          updates.completedAt = new Date();
-        }
-
-        return {...ride, ...updates};
-      }),
-    );
+          return {...ride, ...updates};
+        }),
+      );
+    } catch (error) {
+      console.error('Failed to update ride status:', error);
+      throw error;
+    }
   };
 
   const getRideById = (rideId: string): Ride | undefined => {
@@ -233,15 +288,16 @@ export const DataProvider = ({children}: {children: ReactNode}) => {
     );
   };
 
-  const createBid = (bid: Omit<Bid, 'id' | 'createdAt'>): Bid => {
-    const newBid: Bid = {
-      ...bid,
-      id: `bid_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      createdAt: new Date(),
-    };
-
-    setBids(prev => [...prev, newBid]);
-    return newBid;
+  const createBid = async (bid: Omit<Bid, 'id' | 'createdAt'>): Promise<Bid> => {
+    try {
+      const apiBid = await bidsApi.create(convertBidToApiBid(bid));
+      const newBid = convertApiBidToBid(apiBid);
+      setBids(prev => [...prev, newBid]);
+      return newBid;
+    } catch (error) {
+      console.error('Failed to create bid:', error);
+      throw error;
+    }
   };
 
   const getBidsByRide = (rideId: string): Bid[] => {
@@ -254,19 +310,16 @@ export const DataProvider = ({children}: {children: ReactNode}) => {
     return bids.filter(bid => bid.driverId === driverId);
   };
 
-  const deleteBid = (bidId: string) => {
-    setBids(prev => prev.filter(bid => bid.id !== bidId));
-  };
-
-  const expireStaleRides = () => {
-    setRides(prev =>
-      prev.map(ride => {
-        if (ride.status === 'OPEN' && shouldExpireRide(ride.expiresAt)) {
-          return {...ride, status: 'EXPIRED'};
-        }
-        return ride;
-      }),
-    );
+  const deleteBid = async (bidId: string) => {
+    try {
+      await bidsApi.withdraw(bidId);
+      setBids(prev => prev.map(bid => 
+        bid.id === bidId ? {...bid, status: 'WITHDRAWN'} : bid
+      ));
+    } catch (error) {
+      console.error('Failed to delete bid:', error);
+      throw error;
+    }
   };
 
   const getCurrentUser = (): User => {
@@ -287,9 +340,16 @@ export const DataProvider = ({children}: {children: ReactNode}) => {
     return undefined;
   };
 
-  const updateDriverProfile = (userId: string, vehicle: DriverProfile['vehicle']) => {
-    if (userId === MOCK_USER.id) {
-      setDriverProfile(prev => ({...prev, vehicle}));
+  const updateDriverProfile = async (userId: string, vehicle: DriverProfile['vehicle']) => {
+    try {
+      if (userId === MOCK_USER.id) {
+        // TODO: Call API to update vehicle
+        // await driversApi.createOrUpdateVehicle(userId, vehicle);
+        setDriverProfile(prev => ({...prev, vehicle}));
+      }
+    } catch (error) {
+      console.error('Failed to update driver profile:', error);
+      throw error;
     }
   };
 
@@ -313,35 +373,50 @@ export const DataProvider = ({children}: {children: ReactNode}) => {
     return Array.from(blockedUsers);
   };
 
-  const reportUser = (userId: string, reason: string) => {
-    const report = {
-      userId,
-      reason,
-      timestamp: new Date(),
-    };
-    setReports(prev => [...prev, report]);
-    console.log('User reported:', report);
-    // In production, this would send to moderation system
+  const reportUser = async (userId: string, reason: string) => {
+    try {
+      await reportsApi.create({
+        reporter_type: 'rider', // TODO: Determine from current role
+        reporter_id: MOCK_USER.id,
+        reported_type: 'driver', // TODO: Determine from reported user
+        reported_id: userId,
+        reason,
+      });
+      console.log('User reported successfully');
+    } catch (error) {
+      console.error('Failed to report user:', error);
+      throw error;
+    }
+  };
+
+  const expireStaleRides = () => {
+    // Check for expired rides and update their status locally
+    const now = new Date();
+    setRides(prev =>
+      prev.map(ride => {
+        if (ride.status === 'OPEN' && ride.expiresAt < now) {
+          return {...ride, status: 'EXPIRED'};
+        }
+        return ride;
+      }),
+    );
   };
 
   const resetAllData = async () => {
     try {
-      // Clear AsyncStorage
-      await Promise.all([
-        AsyncStorage.removeItem(RIDES_STORAGE_KEY),
-        AsyncStorage.removeItem(BIDS_STORAGE_KEY),
-        AsyncStorage.removeItem(BLOCKED_USERS_STORAGE_KEY),
-      ]);
+      // Clear local storage
+      await AsyncStorage.removeItem(BLOCKED_USERS_STORAGE_KEY);
       
-      // Reset state to fresh sample data
-      const freshRides = generateSampleRides();
-      const freshBids = generateSampleBids(freshRides);
-      setRides(freshRides);
-      setBids(freshBids);
+      // Reset state
+      setRides([]);
+      setBids([]);
       setBlockedUsers(new Set());
       setReports([]);
       
-      console.log('All data reset to sample data');
+      // Reload from API
+      await loadData();
+      
+      console.log('All data reset to API data');
     } catch (error) {
       console.error('Failed to reset data:', error);
       throw error;
@@ -357,11 +432,13 @@ export const DataProvider = ({children}: {children: ReactNode}) => {
         getRideById,
         getRidesByRider,
         getOpenRides,
+        refreshRides,
         bids,
         createBid,
         getBidsByRide,
         getBidsByDriver,
         deleteBid,
+        refreshBids,
         expireStaleRides,
         getCurrentUser,
         getRiderProfile,
@@ -373,6 +450,7 @@ export const DataProvider = ({children}: {children: ReactNode}) => {
         getBlockedUsers,
         reportUser,
         resetAllData,
+        isLoading,
       }}>
       {children}
     </DataContext.Provider>
