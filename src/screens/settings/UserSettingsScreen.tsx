@@ -8,7 +8,9 @@ import {
   Switch,
   TouchableOpacity,
   Alert,
+  Image,
 } from 'react-native';
+import {launchImageLibrary, launchCamera} from 'react-native-image-picker';
 import {useSettings} from '../../contexts/SettingsContext';
 import {useRole} from '../../contexts/RoleContext';
 import {useData} from '../../contexts/DataContext';
@@ -22,6 +24,7 @@ const UserSettingsScreen = () => {
     getDriverProfile,
     getBlockedUsers,
     unblockUser,
+    updateDriverProfile,
   } = useData();
 
   const currentUser = getCurrentUser();
@@ -51,6 +54,117 @@ const UserSettingsScreen = () => {
           },
         },
       ],
+    );
+  };
+
+  const handleAddPhoto = () => {
+    const currentPhotos = driverProfile?.vehicle?.photos || [];
+    if (currentPhotos.length >= 3) {
+      Alert.alert('Maximum Photos', 'You can only upload up to 3 vehicle photos.');
+      return;
+    }
+
+    Alert.alert(
+      'Add Vehicle Photo',
+      'Choose a source',
+      [
+        {
+          text: 'Camera',
+          onPress: () => {
+            launchCamera(
+              {
+                mediaType: 'photo',
+                maxWidth: 1024,
+                maxHeight: 1024,
+                quality: 0.8,
+              },
+              response => {
+                if (response.didCancel) {
+                  return;
+                }
+                if (response.errorCode) {
+                  Alert.alert('Error', response.errorMessage || 'Failed to open camera');
+                  return;
+                }
+                if (response.assets && response.assets[0]?.uri) {
+                  const newPhotos = [...currentPhotos, response.assets[0].uri];
+                  updateDriverProfile(currentUser.id, {
+                    ...driverProfile?.vehicle,
+                    make: driverProfile?.vehicle?.make || '',
+                    model: driverProfile?.vehicle?.model || '',
+                    year: driverProfile?.vehicle?.year || new Date().getFullYear(),
+                    color: driverProfile?.vehicle?.color || '',
+                    licensePlate: driverProfile?.vehicle?.licensePlate || '',
+                    photos: newPhotos,
+                  });
+                }
+              }
+            );
+          },
+        },
+        {
+          text: 'Photo Library',
+          onPress: () => {
+            launchImageLibrary(
+              {
+                mediaType: 'photo',
+                maxWidth: 1024,
+                maxHeight: 1024,
+                quality: 0.8,
+              },
+              response => {
+                if (response.didCancel) {
+                  return;
+                }
+                if (response.errorCode) {
+                  Alert.alert('Error', response.errorMessage || 'Failed to open library');
+                  return;
+                }
+                if (response.assets && response.assets[0]?.uri) {
+                  const newPhotos = [...currentPhotos, response.assets[0].uri];
+                  updateDriverProfile(currentUser.id, {
+                    ...driverProfile?.vehicle,
+                    make: driverProfile?.vehicle?.make || '',
+                    model: driverProfile?.vehicle?.model || '',
+                    year: driverProfile?.vehicle?.year || new Date().getFullYear(),
+                    color: driverProfile?.vehicle?.color || '',
+                    licensePlate: driverProfile?.vehicle?.licensePlate || '',
+                    photos: newPhotos,
+                  });
+                }
+              }
+            );
+          },
+        },
+        {text: 'Cancel', style: 'cancel'},
+      ]
+    );
+  };
+
+  const handleRemovePhoto = (index: number) => {
+    Alert.alert(
+      'Remove Photo',
+      'Are you sure you want to remove this photo?',
+      [
+        {text: 'Cancel', style: 'cancel'},
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: () => {
+            const currentPhotos = driverProfile?.vehicle?.photos || [];
+            const newPhotos = currentPhotos.filter((_, i) => i !== index);
+            updateDriverProfile(currentUser.id, {
+              ...driverProfile?.vehicle,
+              make: driverProfile?.vehicle?.make || '',
+              model: driverProfile?.vehicle?.model || '',
+              year: driverProfile?.vehicle?.year || new Date().getFullYear(),
+              color: driverProfile?.vehicle?.color || '',
+              licensePlate: driverProfile?.vehicle?.licensePlate || '',
+              photos: newPhotos,
+            });
+          },
+        },
+      ]
     );
   };
 
@@ -259,6 +373,135 @@ const UserSettingsScreen = () => {
               </TouchableOpacity>
             );
           })}
+
+          <Text style={styles.inputLabel}>Vehicle Information</Text>
+          <Text style={styles.helpText}>
+            Your vehicle details (optional)
+          </Text>
+          
+          <Text style={styles.subLabel}>Make</Text>
+          <TextInput
+            style={styles.textInput}
+            value={driverProfile?.vehicle?.make || ''}
+            onChangeText={text =>
+              updateDriverProfile(currentUser.id, {
+                ...driverProfile?.vehicle,
+                make: text,
+                model: driverProfile?.vehicle?.model || '',
+                year: driverProfile?.vehicle?.year || new Date().getFullYear(),
+                color: driverProfile?.vehicle?.color || '',
+                licensePlate: driverProfile?.vehicle?.licensePlate || '',
+                photos: driverProfile?.vehicle?.photos || [],
+              })
+            }
+            placeholder="e.g., Toyota"
+            placeholderTextColor="#999"
+          />
+
+          <Text style={styles.subLabel}>Model</Text>
+          <TextInput
+            style={styles.textInput}
+            value={driverProfile?.vehicle?.model || ''}
+            onChangeText={text =>
+              updateDriverProfile(currentUser.id, {
+                ...driverProfile?.vehicle,
+                make: driverProfile?.vehicle?.make || '',
+                model: text,
+                year: driverProfile?.vehicle?.year || new Date().getFullYear(),
+                color: driverProfile?.vehicle?.color || '',
+                licensePlate: driverProfile?.vehicle?.licensePlate || '',
+                photos: driverProfile?.vehicle?.photos || [],
+              })
+            }
+            placeholder="e.g., Camry"
+            placeholderTextColor="#999"
+          />
+
+          <Text style={styles.subLabel}>Year</Text>
+          <TextInput
+            style={styles.textInput}
+            value={driverProfile?.vehicle?.year?.toString() || ''}
+            onChangeText={text =>
+              updateDriverProfile(currentUser.id, {
+                ...driverProfile?.vehicle,
+                make: driverProfile?.vehicle?.make || '',
+                model: driverProfile?.vehicle?.model || '',
+                year: parseInt(text) || new Date().getFullYear(),
+                color: driverProfile?.vehicle?.color || '',
+                licensePlate: driverProfile?.vehicle?.licensePlate || '',
+                photos: driverProfile?.vehicle?.photos || [],
+              })
+            }
+            placeholder="e.g., 2020"
+            placeholderTextColor="#999"
+            keyboardType="numeric"
+          />
+
+          <Text style={styles.subLabel}>Color</Text>
+          <TextInput
+            style={styles.textInput}
+            value={driverProfile?.vehicle?.color || ''}
+            onChangeText={text =>
+              updateDriverProfile(currentUser.id, {
+                ...driverProfile?.vehicle,
+                make: driverProfile?.vehicle?.make || '',
+                model: driverProfile?.vehicle?.model || '',
+                year: driverProfile?.vehicle?.year || new Date().getFullYear(),
+                color: text,
+                licensePlate: driverProfile?.vehicle?.licensePlate || '',
+                photos: driverProfile?.vehicle?.photos || [],
+              })
+            }
+            placeholder="e.g., Black"
+            placeholderTextColor="#999"
+          />
+
+          <Text style={styles.subLabel}>License Plate</Text>
+          <TextInput
+            style={styles.textInput}
+            value={driverProfile?.vehicle?.licensePlate || ''}
+            onChangeText={text =>
+              updateDriverProfile(currentUser.id, {
+                ...driverProfile?.vehicle,
+                make: driverProfile?.vehicle?.make || '',
+                model: driverProfile?.vehicle?.model || '',
+                year: driverProfile?.vehicle?.year || new Date().getFullYear(),
+                color: driverProfile?.vehicle?.color || '',
+                licensePlate: text,
+                photos: driverProfile?.vehicle?.photos || [],
+              })
+            }
+            placeholder="e.g., ABC1234"
+            placeholderTextColor="#999"
+            autoCapitalize="characters"
+          />
+
+          <Text style={styles.inputLabel}>Vehicle Photos</Text>
+          <Text style={styles.helpText}>
+            Upload up to 3 photos of your vehicle (optional)
+          </Text>
+          
+          <View style={styles.photoGrid}>
+            {(driverProfile?.vehicle?.photos || []).map((photoUri, index) => (
+              <View key={index} style={styles.photoContainer}>
+                <Image source={{uri: photoUri}} style={styles.vehiclePhoto} />
+                <TouchableOpacity
+                  style={styles.removePhotoButton}
+                  onPress={() => handleRemovePhoto(index)}>
+                  <Text style={styles.removePhotoText}>✕</Text>
+                </TouchableOpacity>
+              </View>
+            ))}
+            
+            {(driverProfile?.vehicle?.photos || []).length < 3 && (
+              <TouchableOpacity
+                style={styles.addPhotoButton}
+                onPress={handleAddPhoto}>
+                <Text style={styles.addPhotoText}>+</Text>
+                <Text style={styles.addPhotoLabel}>Add Photo</Text>
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
       )}
 
@@ -330,6 +573,13 @@ const styles = StyleSheet.create({
     color: '#000',
     marginTop: 16,
     marginBottom: 8,
+  },
+  subLabel: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#333',
+    marginTop: 12,
+    marginBottom: 4,
   },
   helpText: {
     fontSize: 12,
@@ -405,6 +655,66 @@ const styles = StyleSheet.create({
   checkboxLabel: {
     fontSize: 16,
     color: '#000',
+  },
+  photoGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginTop: 8,
+    gap: 12,
+  },
+  photoContainer: {
+    position: 'relative',
+    width: 100,
+    height: 100,
+  },
+  vehiclePhoto: {
+    width: 100,
+    height: 100,
+    borderRadius: 8,
+    backgroundColor: '#f0f0f0',
+  },
+  removePhotoButton: {
+    position: 'absolute',
+    top: -8,
+    right: -8,
+    backgroundColor: '#FF3B30',
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: 2},
+    shadowOpacity: 0.25,
+    shadowRadius: 3,
+    elevation: 5,
+  },
+  removePhotoText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+    lineHeight: 20,
+  },
+  addPhotoButton: {
+    width: 100,
+    height: 100,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: '#007AFF',
+    borderStyle: 'dashed',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#f9f9f9',
+  },
+  addPhotoText: {
+    fontSize: 32,
+    color: '#007AFF',
+    fontWeight: '300',
+  },
+  addPhotoLabel: {
+    fontSize: 12,
+    color: '#007AFF',
+    marginTop: 4,
   },
 });
 

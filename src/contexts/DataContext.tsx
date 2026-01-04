@@ -38,6 +38,7 @@ interface DataContextType {
   getCurrentUser: () => User;
   getRiderProfile: (userId: string) => RiderProfile | undefined;
   getDriverProfile: (userId: string) => DriverProfile | undefined;
+  updateDriverProfile: (userId: string, vehicle: DriverProfile['vehicle']) => void;
 
   // Safety
   blockUser: (userId: string) => void;
@@ -72,6 +73,14 @@ const MOCK_RIDER_PROFILE: RiderProfile = {
 const MOCK_DRIVER_PROFILE: DriverProfile = {
   userId: 'user_001',
   completedRidesCount: 47, // Private only
+  vehicle: {
+    make: '',
+    model: '',
+    year: new Date().getFullYear(),
+    color: '',
+    licensePlate: '',
+    photos: [],
+  },
 };
 
 // Generate initial sample data once
@@ -85,6 +94,7 @@ export const DataProvider = ({children}: {children: ReactNode}) => {
   const [blockedUsers, setBlockedUsers] = useState<Set<string>>(new Set());
   const [reports, setReports] = useState<Array<{userId: string; reason: string; timestamp: Date}>>([]);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [driverProfile, setDriverProfile] = useState<DriverProfile>(MOCK_DRIVER_PROFILE);
 
   const loadData = async () => {
     try {
@@ -268,9 +278,15 @@ export const DataProvider = ({children}: {children: ReactNode}) => {
 
   const getDriverProfile = (userId: string): DriverProfile | undefined => {
     if (userId === MOCK_USER.id) {
-      return MOCK_DRIVER_PROFILE;
+      return driverProfile;
     }
     return undefined;
+  };
+
+  const updateDriverProfile = (userId: string, vehicle: DriverProfile['vehicle']) => {
+    if (userId === MOCK_USER.id) {
+      setDriverProfile(prev => ({...prev, vehicle}));
+    }
   };
 
   const blockUser = (userId: string) => {
@@ -346,6 +362,7 @@ export const DataProvider = ({children}: {children: ReactNode}) => {
         getCurrentUser,
         getRiderProfile,
         getDriverProfile,
+        updateDriverProfile,
         blockUser,
         unblockUser,
         isUserBlocked,

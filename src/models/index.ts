@@ -17,6 +17,14 @@ export interface RiderProfile {
 export interface DriverProfile {
   userId: string;
   completedRidesCount: number; // Private only - never public or comparative
+  vehicle?: {
+    make: string;
+    model: string;
+    year: number;
+    color: string;
+    licensePlate: string;
+    photos: string[]; // Array of up to 3 photo URIs
+  };
 }
 
 // Explicit ride lifecycle - state transitions must be manual and explicit

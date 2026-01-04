@@ -16,14 +16,14 @@ const SettingsNavigator = () => {
         tabBarIndicatorStyle: {backgroundColor: '#007AFF'},
       }}>
       <Tab.Screen
-        name="AppSettings"
-        component={AppSettingsScreen}
-        options={{title: 'App Settings'}}
-      />
-      <Tab.Screen
         name="UserSettings"
         component={UserSettingsScreen}
         options={{title: 'User Settings'}}
+      />
+      <Tab.Screen
+        name="AppSettings"
+        component={AppSettingsScreen}
+        options={{title: 'App Settings'}}
       />
     </Tab.Navigator>
   );
