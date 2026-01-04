@@ -168,6 +168,78 @@ const UserSettingsScreen = () => {
     );
   };
 
+  const handleStartIdentityVerification = () => {
+    Alert.alert(
+      'Identity Verification',
+      'You will be directed to verify your identity using a government-issued ID and selfie. This process is secure and managed by Persona.\n\nYou must be 18 or older to drive on DryverHub.',
+      [
+        {text: 'Cancel', style: 'cancel'},
+        {
+          text: 'Continue',
+          onPress: () => {
+            // TODO: Call backend to create Persona inquiry session
+            // TODO: Launch Persona SDK with session token
+            Alert.alert(
+              'Coming Soon',
+              'Identity verification will be integrated with Persona API in production.'
+            );
+          },
+        },
+      ]
+    );
+  };
+
+  const handleStartBackgroundCheck = () => {
+    Alert.alert(
+      'Background Check',
+      'You will complete a criminal background check through Checkr.\n\n' +
+        'IMPORTANT:\n' +
+        '• Any applicable fee is paid by you directly\n' +
+        '• The platform does not process payment\n' +
+        '• Results are pass/fail only\n\n' +
+        'Background checks confirm criminal history only. ' +
+        'Verification does not guarantee safety or driving quality.',
+      [
+        {text: 'Cancel', style: 'cancel'},
+        {
+          text: 'Continue',
+          onPress: () => {
+            // TODO: Call backend to create Checkr candidate
+            // TODO: Open Checkr consent/disclosure flow
+            Alert.alert(
+              'Coming Soon',
+              'Background check will be integrated with Checkr API in production.'
+            );
+          },
+        },
+      ]
+    );
+  };
+
+  const handleStartVehicleVerification = () => {
+    Alert.alert(
+      'Vehicle Verification',
+      'To verify your vehicle, you will need:\n\n' +
+        '1. NC DMV vehicle registration\n' +
+        '2. Proof of current insurance\n' +
+        '3. Vehicle photos (front + side)\n\n' +
+        'Documents will be manually reviewed by our team. ' +
+        'You are responsible for any DMV fees.',
+      [
+        {text: 'Cancel', style: 'cancel'},
+        {
+          text: 'Coming Soon',
+          onPress: () => {
+            Alert.alert(
+              'Coming Soon',
+              'Document upload will be available in the next update.'
+            );
+          },
+        },
+      ]
+    );
+  };
+
   return (
     <ScrollView style={styles.container}>
       {/* Read-Only Account Information */}
@@ -373,6 +445,109 @@ const UserSettingsScreen = () => {
               </TouchableOpacity>
             );
           })}
+
+          <Text style={styles.inputLabel}>Driver Verification</Text>
+          <Text style={styles.helpText}>
+            Complete verifications to display status to riders. Verification does not affect bid order or pricing.
+          </Text>
+
+          {/* Identity Verification */}
+          <View style={styles.verificationItem}>
+            <View style={styles.verificationHeader}>
+              <Text style={styles.verificationTitle}>Identity Verification</Text>
+              <View
+                style={[
+                  styles.verificationBadge,
+                  driverProfile?.identityVerified && styles.verificationBadgeVerified,
+                ]}>
+                <Text
+                  style={[
+                    styles.verificationBadgeText,
+                    driverProfile?.identityVerified && styles.verificationBadgeTextVerified,
+                  ]}>
+                  {driverProfile?.identityVerified ? '✓ Verified' : 'Not Verified'}
+                </Text>
+              </View>
+            </View>
+            <Text style={styles.verificationDescription}>
+              Confirm you are 18+ with government-issued ID
+            </Text>
+            {!driverProfile?.identityVerified && (
+              <TouchableOpacity
+                style={styles.verificationButton}
+                onPress={handleStartIdentityVerification}>
+                <Text style={styles.verificationButtonText}>Start Verification</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {/* Background Check */}
+          <View style={styles.verificationItem}>
+            <View style={styles.verificationHeader}>
+              <Text style={styles.verificationTitle}>Background Check</Text>
+              <View
+                style={[
+                  styles.verificationBadge,
+                  driverProfile?.backgroundCheckStatus === 'passed' &&
+                    styles.verificationBadgeVerified,
+                ]}>
+                <Text
+                  style={[
+                    styles.verificationBadgeText,
+                    driverProfile?.backgroundCheckStatus === 'passed' &&
+                      styles.verificationBadgeTextVerified,
+                  ]}>
+                  {driverProfile?.backgroundCheckStatus === 'passed'
+                    ? '✓ Completed'
+                    : 'Not Completed'}
+                </Text>
+              </View>
+            </View>
+            <Text style={styles.verificationDescription}>
+              Criminal background check (you pay fees directly)
+            </Text>
+            {driverProfile?.backgroundCheckStatus !== 'passed' && (
+              <TouchableOpacity
+                style={styles.verificationButton}
+                onPress={handleStartBackgroundCheck}>
+                <Text style={styles.verificationButtonText}>Start Check</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {/* Vehicle Verification */}
+          <View style={styles.verificationItem}>
+            <View style={styles.verificationHeader}>
+              <Text style={styles.verificationTitle}>Vehicle Verification</Text>
+              <View
+                style={[
+                  styles.verificationBadge,
+                  driverProfile?.vehicleVerified && styles.verificationBadgeVerified,
+                ]}>
+                <Text
+                  style={[
+                    styles.verificationBadgeText,
+                    driverProfile?.vehicleVerified && styles.verificationBadgeTextVerified,
+                  ]}>
+                  {driverProfile?.vehicleVerified ? '✓ Verified' : 'Not Verified'}
+                </Text>
+              </View>
+            </View>
+            <Text style={styles.verificationDescription}>
+              Upload NC DMV registration and insurance proof
+            </Text>
+            {!driverProfile?.vehicleVerified && (
+              <TouchableOpacity
+                style={styles.verificationButton}
+                onPress={handleStartVehicleVerification}>
+                <Text style={styles.verificationButtonText}>Upload Documents</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          <Text style={styles.verificationDisclaimer}>
+            Verification confirms documents only. It does not guarantee safety or driving quality.
+          </Text>
 
           <Text style={styles.inputLabel}>Vehicle Information</Text>
           <Text style={styles.helpText}>
@@ -715,6 +890,67 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#007AFF',
     marginTop: 4,
+  },
+  verificationItem: {
+    backgroundColor: '#f9f9f9',
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  verificationHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  verificationTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#000',
+    flex: 1,
+  },
+  verificationBadge: {
+    backgroundColor: '#f0f0f0',
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 4,
+  },
+  verificationBadgeVerified: {
+    backgroundColor: '#e8f5e9',
+  },
+  verificationBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#666',
+  },
+  verificationBadgeTextVerified: {
+    color: '#2e7d32',
+  },
+  verificationDescription: {
+    fontSize: 13,
+    color: '#666',
+    marginBottom: 10,
+    lineHeight: 18,
+  },
+  verificationButton: {
+    backgroundColor: '#007AFF',
+    paddingVertical: 10,
+    borderRadius: 6,
+    alignItems: 'center',
+  },
+  verificationButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  verificationDisclaimer: {
+    fontSize: 11,
+    color: '#999',
+    fontStyle: 'italic',
+    marginTop: 8,
+    lineHeight: 16,
   },
 });
 

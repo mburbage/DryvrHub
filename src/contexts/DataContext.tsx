@@ -73,6 +73,10 @@ const MOCK_RIDER_PROFILE: RiderProfile = {
 const MOCK_DRIVER_PROFILE: DriverProfile = {
   userId: 'user_001',
   completedRidesCount: 47, // Private only
+  // Verification fields - all start as not completed
+  identityVerified: false,
+  backgroundCheckStatus: 'not_completed',
+  vehicleVerified: false,
   vehicle: {
     make: '',
     model: '',

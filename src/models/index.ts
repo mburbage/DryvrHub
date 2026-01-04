@@ -14,9 +14,24 @@ export interface RiderProfile {
   completedRidesCount: number; // Private only - never public or comparative
 }
 
+// Verification status types - PASS/FAIL ONLY, NO SCORES OR RANKINGS
+export type BackgroundCheckStatus = 'passed' | 'not_completed' | 'rejected';
+
 export interface DriverProfile {
   userId: string;
   completedRidesCount: number; // Private only - never public or comparative
+  // Identity verification (Persona API)
+  identityVerified: boolean;
+  identityVerifiedAt?: Date;
+  personaInquiryId?: string;
+  // Background check (Checkr API)
+  backgroundCheckStatus: BackgroundCheckStatus;
+  backgroundCheckedAt?: Date;
+  checkrReportId?: string;
+  // Vehicle verification (manual, NC DMV-based)
+  vehicleVerified: boolean;
+  vehicleVerifiedAt?: Date;
+  insuranceExpirationDate?: Date;
   vehicle?: {
     make: string;
     model: string;
