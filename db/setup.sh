@@ -50,6 +50,9 @@ echo "Creating Database and User"
 echo "================================================================"
 echo ""
 
+# Set PATH to include PostgreSQL
+export PATH="/usr/local/opt/postgresql@15/bin:$PATH"
+
 # Create user and database
 psql postgres <<EOF
 -- Create user if not exists
@@ -74,13 +77,19 @@ echo "✓ User 'ride_dev_user' created"
 
 echo ""
 echo "================================================================"
-echo "Applying Schema"
+echo "Applying Schemas"
 echo "================================================================"
 echo ""
 
-# Apply schema
+# Apply verification schema
+echo "Applying verification schema (drivers, vehicles)..."
 psql -U ride_dev_user -d ride_marketplace_dev -f db/schema.sql
-echo "✓ Schema applied"
+echo "✓ Verification schema applied"
+
+# Apply core marketplace schema
+echo "Applying core marketplace schema (riders, trips, bids, messages, reports, admin_flags)..."
+psql -U ride_dev_user -d ride_marketplace_dev -f db/schema_core.sql
+echo "✓ Core marketplace schema applied"
 
 echo ""
 echo "================================================================"
@@ -88,9 +97,15 @@ echo "Seeding Development Data"
 echo "================================================================"
 echo ""
 
-# Seed data
+# Seed verification data
+echo "Seeding verification data..."
 psql -U ride_dev_user -d ride_marketplace_dev -f db/seed.sql
-echo "✓ Seed data loaded"
+echo "✓ Verification seed data loaded"
+
+# Seed core marketplace data
+echo "Seeding core marketplace data..."
+psql -U ride_dev_user -d ride_marketplace_dev -f db/seed_core.sql
+echo "✓ Core marketplace seed data loaded"
 
 echo ""
 echo "================================================================"

@@ -1,5 +1,39 @@
 # DryverHub Local Database Setup
 
+## Database Architecture
+
+### Verification Schema (`schema.sql`)
+Driver and vehicle verification tables:
+- **drivers** - Driver verification status (identity, background, vehicle)
+- **vehicles** - Vehicle information and verification status
+
+### Core Marketplace Schema (`schema_core.sql`)
+Marketplace functionality tables:
+- **riders** - Rider accounts and verification
+- **trips** - Trip requests with pickup/dropoff details
+- **bids** - Driver bids on trips
+- **messages** - Basic communication between riders and drivers
+- **reports** - Safety reports (no ratings/rankings)
+- **admin_flags** - Internal admin notes
+
+## Quick Setup
+
+### Automated Setup (Recommended)
+
+Run the setup script from the project root:
+
+```bash
+./db/setup.sh
+```
+
+This will:
+- Install PostgreSQL (if needed)
+- Create database and user
+- Apply both schemas (verification + core marketplace)
+- Load seed data for testing
+
+### Manual Setup
+
 ## Prerequisites
 
 Install PostgreSQL locally:
@@ -41,18 +75,24 @@ GRANT ALL PRIVILEGES ON DATABASE ride_marketplace_dev TO ride_dev_user;
 \q
 ```
 
-### 2. Apply Schema
+### 2. Apply Schemas
 
 ```bash
-# Run schema file
+# Apply verification schema
 psql -U ride_dev_user -d ride_marketplace_dev -f db/schema.sql
+
+# Apply core marketplace schema
+psql -U ride_dev_user -d ride_marketplace_dev -f db/schema_core.sql
 ```
 
 ### 3. Seed Development Data
 
 ```bash
-# Run seed file
+# Seed verification data
 psql -U ride_dev_user -d ride_marketplace_dev -f db/seed.sql
+
+# Seed core marketplace data
+psql -U ride_dev_user -d ride_marketplace_dev -f db/seed_core.sql
 ```
 
 ### 4. Verify Setup
