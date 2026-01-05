@@ -16,7 +16,7 @@ DROP TYPE IF EXISTS sender_type_enum;
 DROP TYPE IF EXISTS user_type_enum;
 
 -- Create enum types
-CREATE TYPE trip_status_enum AS ENUM ('open', 'accepted', 'cancelled', 'expired');
+CREATE TYPE trip_status_enum AS ENUM ('open', 'accepted', 'en_route', 'arrived', 'in_progress', 'completed', 'payment_due', 'paid', 'cancelled', 'expired');
 CREATE TYPE bid_status_enum AS ENUM ('submitted', 'withdrawn', 'accepted', 'rejected');
 CREATE TYPE sender_type_enum AS ENUM ('rider', 'driver');
 CREATE TYPE user_type_enum AS ENUM ('rider', 'driver');
@@ -27,10 +27,15 @@ CREATE TYPE user_type_enum AS ENUM ('rider', 'driver');
 CREATE TABLE riders (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     email TEXT UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     
-    -- Optional verification (binary only)
+    -- Email verification
     email_verified BOOLEAN NOT NULL DEFAULT FALSE,
+    verification_token TEXT,
+    verification_expires_at TIMESTAMP,
+    
+    -- Optional phone verification (binary only)
     phone_verified BOOLEAN NOT NULL DEFAULT FALSE
 );
 
@@ -62,7 +67,25 @@ CREATE TABLE trips (
     -- State
     status trip_status_enum NOT NULL DEFAULT 'open',
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    expires_at TIMESTAMP NOT NULL
+    expires_at TIMESTAMP NOT NULL,
+    
+    -- Trip execution timestamps (post-acceptance)
+    en_route_at TIMESTAMP,
+    arrived_at TIMESTAMP,
+    pickup_at TIMESTAMP,
+    completed_at TIMESTAMP,
+    
+    -- Payment tracking
+    payment_due_at TIMESTAMP,
+    paid_at TIMESTAMP,
+    final_amount DECIMAL(10, 2),
+    
+    -- Pickup verification
+    pickup_code_hash TEXT,
+    
+    -- Cancellation tracking
+    cancelled_by TEXT,  -- 'rider' or 'driver'
+    cancelled_at TIMESTAMP
 );
 
 -- Create indexes for common queries

@@ -1,6 +1,7 @@
 import express, { Request, Response } from 'express';
 import pool from '../config/database';
 import { authenticate, requireRole, requireEmailVerified } from '../middleware/auth';
+import { generatePickupCode, hashPickupCode, verifyPickupCode } from '../utils/pickupCode';
 
 const router = express.Router();
 
@@ -272,31 +273,33 @@ router.post('/:id/accept-bid', authenticate, requireRole('rider'), async (req: R
       }
 
       // Verify bid belongs to this trip
-      const bidResult = await client.query(
+      const bidCheckResult = await client.query(
         'SELECT trip_id, status FROM bids WHERE id = $1 FOR UPDATE',
         [bid_id]
       );
 
-      if (bidResult.rows.length === 0) {
+      if (bidCheckResult.rows.length === 0) {
         await client.query('ROLLBACK');
         return res.status(404).json({ error: 'Bid not found' });
       }
 
-      if (bidResult.rows[0].trip_id !== tripId) {
+      if (bidCheckResult.rows[0].trip_id !== tripId) {
         await client.query('ROLLBACK');
         return res.status(400).json({ error: 'Bid does not belong to this trip' });
       }
 
-      if (bidResult.rows[0].status !== 'submitted') {
+      if (bidCheckResult.rows[0].status !== 'submitted') {
         await client.query('ROLLBACK');
         return res.status(400).json({ error: 'Bid is no longer available' });
       }
 
       // Accept the selected bid
-      await client.query(
-        "UPDATE bids SET status = 'accepted' WHERE id = $1",
+      const bidResult = await client.query(
+        "UPDATE bids SET status = 'accepted' WHERE id = $1 RETURNING bid_amount",
         [bid_id]
       );
+
+      const finalAmount = bidResult.rows[0]?.bid_amount;
 
       // Reject all other bids for this trip
       await client.query(
@@ -304,18 +307,25 @@ router.post('/:id/accept-bid', authenticate, requireRole('rider'), async (req: R
         [tripId, bid_id]
       );
 
-      // Update trip status to accepted
+      // Generate pickup code for trip verification
+      const pickupCode = generatePickupCode();
+      const codeHash = hashPickupCode(pickupCode);
+
+      // Update trip to payment_due status (payment required before trip starts)
       await client.query(
-        "UPDATE trips SET status = 'accepted' WHERE id = $1",
-        [tripId]
+        "UPDATE trips SET status = 'payment_due', pickup_code_hash = $2, payment_due_at = NOW(), final_amount = $3 WHERE id = $1",
+        [tripId, codeHash, finalAmount]
       );
 
       await client.query('COMMIT');
 
       res.json({ 
-        message: 'Bid accepted successfully',
+        message: 'Bid accepted - payment due before trip',
         trip_id: tripId,
-        bid_id: bid_id
+        bid_id: bid_id,
+        pickup_code: pickupCode,
+        status: 'payment_due',
+        final_amount: finalAmount
       });
     } catch (error) {
       await client.query('ROLLBACK');
@@ -385,9 +395,14 @@ router.post('/:id/cancel', authenticate, async (req: Request, res: Response) => 
         return res.status(400).json({ error: 'Trip is already cancelled' });
       }
 
-      if (trip.status === 'completed') {
+      if (trip.status === 'paid') {
         await client.query('ROLLBACK');
         return res.status(400).json({ error: 'Cannot cancel a completed trip' });
+      }
+
+      if (trip.status === 'in_progress') {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: 'Cannot cancel a trip that is in progress' });
       }
 
       // Cancel the trip
@@ -426,6 +441,351 @@ router.post('/:id/cancel', authenticate, async (req: Request, res: Response) => 
   } catch (error) {
     console.error('Error cancelling trip:', error);
     res.status(500).json({ error: 'Failed to cancel trip', details: error instanceof Error ? error.message : 'Unknown error' });
+  }
+});
+
+// POST /api/trips/:id/start-en-route - Driver marks they are en route to pickup
+router.post('/:id/start-en-route', authenticate, requireRole('driver'), async (req: Request, res: Response) => {
+  try {
+    const tripId = req.params.id;
+    const driverId = req.user?.id;
+
+    if (!driverId) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // Verify driver has an accepted bid for this trip
+      const bidCheck = await client.query(
+        `SELECT b.id FROM bids b 
+         JOIN trips t ON t.id = b.trip_id
+         WHERE b.trip_id = $1 AND b.driver_id = $2 AND b.status = 'accepted' AND t.status = 'accepted'
+         FOR UPDATE`,
+        [tripId, driverId]
+      );
+
+      if (bidCheck.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return res.status(403).json({ error: 'You do not have an accepted bid for this trip or trip is not in accepted state' });
+      }
+
+      // Update trip status to en_route
+      await client.query(
+        "UPDATE trips SET status = 'en_route', en_route_at = NOW() WHERE id = $1",
+        [tripId]
+      );
+
+      await client.query('COMMIT');
+
+      res.json({ 
+        message: 'Trip status updated to en route',
+        trip_id: tripId
+      });
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    console.error('Error updating trip to en route:', error);
+    res.status(500).json({ error: 'Failed to update trip status' });
+  }
+});
+
+// POST /api/trips/:id/arrived - Driver marks they have arrived at pickup location
+router.post('/:id/arrived', authenticate, requireRole('driver'), async (req: Request, res: Response) => {
+  try {
+    const tripId = req.params.id;
+    const driverId = req.user?.id;
+
+    if (!driverId) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // Verify driver has an accepted bid and trip is en_route
+      const bidCheck = await client.query(
+        `SELECT b.id FROM bids b 
+         JOIN trips t ON t.id = b.trip_id
+         WHERE b.trip_id = $1 AND b.driver_id = $2 AND b.status = 'accepted' AND t.status = 'en_route'
+         FOR UPDATE`,
+        [tripId, driverId]
+      );
+
+      if (bidCheck.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return res.status(403).json({ error: 'You do not have an accepted bid for this trip or trip is not in en_route state' });
+      }
+
+      // Update trip status to arrived
+      await client.query(
+        "UPDATE trips SET status = 'arrived', arrived_at = NOW() WHERE id = $1",
+        [tripId]
+      );
+
+      await client.query('COMMIT');
+
+      res.json({ 
+        message: 'Trip status updated to arrived',
+        trip_id: tripId
+      });
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    console.error('Error updating trip to arrived:', error);
+    res.status(500).json({ error: 'Failed to update trip status' });
+  }
+});
+
+// POST /api/trips/:id/verify-pickup - Verify pickup code (doesn't change state, just validates)
+router.post('/:id/verify-pickup', authenticate, requireRole('driver'), async (req: Request, res: Response) => {
+  try {
+    const tripId = req.params.id;
+    const { pickup_code } = req.body;
+    const driverId = req.user?.id;
+
+    if (!driverId) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    if (!pickup_code) {
+      return res.status(400).json({ error: 'Pickup code is required' });
+    }
+
+    // Verify driver has an accepted bid for this trip
+    const bidCheck = await pool.query(
+      `SELECT b.id FROM bids b 
+       JOIN trips t ON t.id = b.trip_id
+       WHERE b.trip_id = $1 AND b.driver_id = $2 AND b.status = 'accepted'`,
+      [tripId, driverId]
+    );
+
+    if (bidCheck.rows.length === 0) {
+      return res.status(403).json({ error: 'You do not have an accepted bid for this trip' });
+    }
+
+    // Get pickup code hash from trip
+    const tripResult = await pool.query(
+      'SELECT pickup_code_hash FROM trips WHERE id = $1',
+      [tripId]
+    );
+
+    if (tripResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Trip not found' });
+    }
+
+    const { pickup_code_hash } = tripResult.rows[0];
+
+    if (!pickup_code_hash) {
+      return res.status(400).json({ error: 'No pickup code set for this trip' });
+    }
+
+    // Verify the code
+    const isValid = verifyPickupCode(pickup_code, pickup_code_hash);
+
+    res.json({ 
+      valid: isValid,
+      message: isValid ? 'Pickup code is valid' : 'Pickup code is invalid'
+    });
+  } catch (error) {
+    console.error('Error verifying pickup code:', error);
+    res.status(500).json({ error: 'Failed to verify pickup code' });
+  }
+});
+
+// POST /api/trips/:id/start-trip - Start trip after verifying pickup code
+router.post('/:id/start-trip', authenticate, requireRole('driver'), async (req: Request, res: Response) => {
+  try {
+    const tripId = req.params.id;
+    const { pickup_code } = req.body;
+    const driverId = req.user?.id;
+
+    if (!driverId) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    if (!pickup_code) {
+      return res.status(400).json({ error: 'Pickup code is required' });
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // Verify driver has an accepted bid and trip is arrived
+      const tripCheck = await client.query(
+        `SELECT t.id, t.pickup_code_hash FROM trips t 
+         JOIN bids b ON b.trip_id = t.id
+         WHERE t.id = $1 AND b.driver_id = $2 AND b.status = 'accepted' AND t.status = 'arrived'
+         FOR UPDATE`,
+        [tripId, driverId]
+      );
+
+      if (tripCheck.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return res.status(403).json({ error: 'You do not have an accepted bid for this trip or trip is not in arrived state' });
+      }
+
+      const { pickup_code_hash } = tripCheck.rows[0];
+
+      if (!pickup_code_hash) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: 'No pickup code set for this trip' });
+      }
+
+      // Verify the pickup code
+      const isValid = verifyPickupCode(pickup_code, pickup_code_hash);
+
+      if (!isValid) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: 'Invalid pickup code' });
+      }
+
+      // Update trip status to in_progress
+      await client.query(
+        "UPDATE trips SET status = 'in_progress', pickup_at = NOW() WHERE id = $1",
+        [tripId]
+      );
+
+      await client.query('COMMIT');
+
+      res.json({ 
+        message: 'Trip started successfully',
+        trip_id: tripId
+      });
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    console.error('Error starting trip:', error);
+    res.status(500).json({ error: 'Failed to start trip' });
+  }
+});
+
+// POST /api/trips/:id/complete - Driver marks trip as complete
+router.post('/:id/complete', authenticate, requireRole('driver'), async (req: Request, res: Response) => {
+  try {
+    const tripId = req.params.id;
+    const driverId = req.user?.id;
+
+    if (!driverId) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // Verify driver has an accepted bid and trip is in_progress
+      const bidCheck = await client.query(
+        `SELECT b.id FROM bids b 
+         JOIN trips t ON t.id = b.trip_id
+         WHERE b.trip_id = $1 AND b.driver_id = $2 AND b.status = 'accepted' AND t.status = 'in_progress'
+         FOR UPDATE`,
+        [tripId, driverId]
+      );
+
+      if (bidCheck.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return res.status(403).json({ error: 'You do not have an accepted bid for this trip or trip is not in progress' });
+      }
+
+      // Update trip status to paid (trip completed, final status)
+      await client.query(
+        "UPDATE trips SET status = 'paid', completed_at = NOW() WHERE id = $1",
+        [tripId]
+      );
+
+      await client.query('COMMIT');
+
+      res.json({ 
+        message: 'Trip completed successfully',
+        trip_id: tripId,
+        status: 'paid'
+      });
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    console.error('Error completing trip:', error);
+    res.status(500).json({ error: 'Failed to complete trip' });
+  }
+});
+
+// POST /api/trips/:id/confirm-payment - Rider confirms payment was made
+router.post('/:id/confirm-payment', authenticate, requireRole('rider'), async (req: Request, res: Response) => {
+  try {
+    const { id: tripId } = req.params;
+    const riderId = req.user!.id;
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // Get trip and verify rider owns it
+      const tripResult = await client.query(
+        `SELECT * FROM trips WHERE id = $1 FOR UPDATE`,
+        [tripId]
+      );
+
+      if (tripResult.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({ error: 'Trip not found' });
+      }
+
+      const trip = tripResult.rows[0];
+
+      // Verify rider owns the trip
+      if (trip.rider_id !== riderId) {
+        await client.query('ROLLBACK');
+        return res.status(403).json({ error: 'Not authorized to confirm payment for this trip' });
+      }
+
+      // Verify trip is in payment_due state
+      if (trip.status !== 'payment_due') {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: `Cannot confirm payment from status: ${trip.status}` });
+      }
+
+      // Update trip to accepted (payment confirmed, ready to start trip)
+      await client.query(
+        "UPDATE trips SET status = 'accepted', paid_at = NOW() WHERE id = $1",
+        [tripId]
+      );
+
+      await client.query('COMMIT');
+
+      res.json({ 
+        message: 'Payment confirmed - trip ready to start',
+        trip_id: tripId,
+        status: 'accepted'
+      });
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    console.error('Error confirming payment:', error);
+    res.status(500).json({ error: 'Failed to confirm payment' });
   }
 });
 

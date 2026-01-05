@@ -188,3 +188,31 @@ Trip a693f24d-7c37-481f-a20b-9fc18834a165 cancelled by driver fd809b68-e2ae-48eb
 [INFO] 21:14:07 Restarting: /Users/michaelburbage/Documents/Development/dryvrhub/backend/src/routes/trips.ts has been modified
 🚀 DryverHub API server running on http://localhost:3000
 📊 Health check: http://localhost:3000/health
+[INFO] 21:19:58 Restarting: /Users/michaelburbage/Documents/Development/dryvrhub/backend/src/routes/trips.ts has been modified
+🚀 DryverHub API server running on http://localhost:3000
+📊 Health check: http://localhost:3000/health
+[INFO] 21:20:59 Restarting: /Users/michaelburbage/Documents/Development/dryvrhub/backend/src/routes/trips.ts has been modified
+🚀 DryverHub API server running on http://localhost:3000
+📊 Health check: http://localhost:3000/health
+[INFO] 21:21:12 Restarting: /Users/michaelburbage/Documents/Development/dryvrhub/backend/src/routes/trips.ts has been modified
+🚀 DryverHub API server running on http://localhost:3000
+📊 Health check: http://localhost:3000/health
+[INFO] 21:26:11 Restarting: /Users/michaelburbage/Documents/Development/dryvrhub/backend/src/routes/trips.ts has been modified
+🚀 DryverHub API server running on http://localhost:3000
+📊 Health check: http://localhost:3000/health
+[INFO] 21:26:19 Restarting: /Users/michaelburbage/Documents/Development/dryvrhub/backend/src/routes/trips.ts has been modified
+🚀 DryverHub API server running on http://localhost:3000
+📊 Health check: http://localhost:3000/health
+[INFO] 21:34:50 Restarting: /Users/michaelburbage/Documents/Development/dryvrhub/backend/src/routes/trips.ts has been modified
+Error: listen EADDRINUSE: address already in use :::3000
+    at Server.setupListenHandle [as _listen2] (node:net:1937:16)
+    at listenInCluster (node:net:1994:12)
+    at Server.listen (node:net:2099:7)
+    at Function.listen (/Users/michaelburbage/Documents/Development/dryvrhub/backend/node_modules/express/lib/application.js:635:24)
+    at Object.<anonymous> (/Users/michaelburbage/Documents/Development/dryvrhub/backend/src/index.ts:49:5)
+    at Module.<anonymous> (node:internal/modules/cjs/loader:1554:14)
+    at Module._compile (/Users/michaelburbage/Documents/Development/dryvrhub/backend/node_modules/source-map-support/source-map-support.js:568:25)
+    at Module.m._compile (/private/var/folders/gm/zn8gx7vs0q7fms7rw3sd63980000gn/T/ts-node-dev-hook-711557462710815.js:69:33)
+    at node:internal/modules/cjs/loader:1706:10
+    at require.extensions..jsx.require.extensions..js (/private/var/folders/gm/zn8gx7vs0q7fms7rw3sd63980000gn/T/ts-node-dev-hook-711557462710815.js:114:20)
+[ERROR] 21:34:51 Error: listen EADDRINUSE: address already in use :::3000

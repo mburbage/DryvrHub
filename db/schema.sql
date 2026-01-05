@@ -17,7 +17,13 @@ CREATE TYPE background_check_status_enum AS ENUM ('passed', 'not_completed', 're
 CREATE TABLE drivers (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     email TEXT UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    
+    -- Email verification
+    email_verified BOOLEAN NOT NULL DEFAULT FALSE,
+    verification_token TEXT,
+    verification_expires_at TIMESTAMP,
     
     -- Identity verification (Persona API)
     identity_verified BOOLEAN NOT NULL DEFAULT FALSE,
