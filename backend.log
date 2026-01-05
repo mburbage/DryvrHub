@@ -25,3 +25,166 @@
 🚀 DryverHub API server running on http://localhost:3000
 📊 Health check: http://localhost:3000/health
 ✅ Connected to PostgreSQL database
+✅ Connected to PostgreSQL database
+✅ Connected to PostgreSQL database
+✅ Connected to PostgreSQL database
+✅ Connected to PostgreSQL database
+[INFO] 20:47:53 Restarting: /Users/michaelburbage/Documents/Development/dryvrhub/backend/src/routes/trips.ts has been modified
+🚀 DryverHub API server running on http://localhost:3000
+📊 Health check: http://localhost:3000/health
+✅ Connected to PostgreSQL database
+✅ Connected to PostgreSQL database
+✅ Connected to PostgreSQL database
+✅ Connected to PostgreSQL database
+✅ Connected to PostgreSQL database
+✅ Connected to PostgreSQL database
+✅ Connected to PostgreSQL database
+✅ Connected to PostgreSQL database
+✅ Connected to PostgreSQL database
+✅ Connected to PostgreSQL database
+✅ Connected to PostgreSQL database
+✅ Connected to PostgreSQL database
+✅ Connected to PostgreSQL database
+✅ Connected to PostgreSQL database
+✅ Connected to PostgreSQL database
+✅ Connected to PostgreSQL database
+✅ Connected to PostgreSQL database
+✅ Connected to PostgreSQL database
+✅ Connected to PostgreSQL database
+[INFO] 21:04:09 Restarting: /Users/michaelburbage/Documents/Development/dryvrhub/backend/src/routes/trips.ts has been modified
+🚀 DryverHub API server running on http://localhost:3000
+📊 Health check: http://localhost:3000/health
+✅ Connected to PostgreSQL database
+✅ Connected to PostgreSQL database
+Trip b89f0992-f1cd-4792-a76b-11518cbf4ccc cancelled by rider b8946fbd-bf47-47f8-919f-92cd23e9a23a: Changed plans
+✅ Connected to PostgreSQL database
+✅ Connected to PostgreSQL database
+Error cancelling trip: error: invalid input value for enum bid_status_enum: "cancelled"
+    at /Users/michaelburbage/Documents/Development/dryvrhub/backend/node_modules/pg/lib/client.js:545:17
+    at processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at /Users/michaelburbage/Documents/Development/dryvrhub/backend/src/routes/trips.ts:401:9 {
+  length: 111,
+  severity: 'ERROR',
+  code: '22P02',
+  detail: undefined,
+  hint: undefined,
+  position: '26',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'enum.c',
+  line: '132',
+  routine: 'enum_in'
+}
+✅ Connected to PostgreSQL database
+✅ Connected to PostgreSQL database
+Error cancelling trip: error: invalid input value for enum bid_status_enum: "cancelled"
+    at /Users/michaelburbage/Documents/Development/dryvrhub/backend/node_modules/pg/lib/client.js:545:17
+    at processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at /Users/michaelburbage/Documents/Development/dryvrhub/backend/src/routes/trips.ts:401:9 {
+  length: 111,
+  severity: 'ERROR',
+  code: '22P02',
+  detail: undefined,
+  hint: undefined,
+  position: '26',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'enum.c',
+  line: '132',
+  routine: 'enum_in'
+}
+✅ Connected to PostgreSQL database
+Error cancelling trip: error: invalid input value for enum bid_status_enum: "cancelled"
+    at /Users/michaelburbage/Documents/Development/dryvrhub/backend/node_modules/pg/lib/client.js:545:17
+    at processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at /Users/michaelburbage/Documents/Development/dryvrhub/backend/src/routes/trips.ts:401:9 {
+  length: 111,
+  severity: 'ERROR',
+  code: '22P02',
+  detail: undefined,
+  hint: undefined,
+  position: '26',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'enum.c',
+  line: '132',
+  routine: 'enum_in'
+}
+Error cancelling trip: error: invalid input value for enum bid_status_enum: "cancelled"
+    at /Users/michaelburbage/Documents/Development/dryvrhub/backend/node_modules/pg/lib/client.js:545:17
+    at processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at /Users/michaelburbage/Documents/Development/dryvrhub/backend/src/routes/trips.ts:401:9 {
+  length: 111,
+  severity: 'ERROR',
+  code: '22P02',
+  detail: undefined,
+  hint: undefined,
+  position: '26',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'enum.c',
+  line: '132',
+  routine: 'enum_in'
+}
+✅ Connected to PostgreSQL database
+✅ Connected to PostgreSQL database
+[INFO] 21:08:26 Restarting: /Users/michaelburbage/Documents/Development/dryvrhub/backend/src/routes/trips.ts has been modified
+🚀 DryverHub API server running on http://localhost:3000
+📊 Health check: http://localhost:3000/health
+✅ Connected to PostgreSQL database
+Error cancelling trip: error: invalid input value for enum bid_status_enum: "cancelled"
+    at /Users/michaelburbage/Documents/Development/dryvrhub/backend/node_modules/pg/lib/client.js:545:17
+    at processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at /Users/michaelburbage/Documents/Development/dryvrhub/backend/src/routes/trips.ts:401:9 {
+  length: 111,
+  severity: 'ERROR',
+  code: '22P02',
+  detail: undefined,
+  hint: undefined,
+  position: '26',
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'enum.c',
+  line: '132',
+  routine: 'enum_in'
+}
+[INFO] 21:09:07 Restarting: /Users/michaelburbage/Documents/Development/dryvrhub/backend/src/routes/trips.ts has been modified
+🚀 DryverHub API server running on http://localhost:3000
+📊 Health check: http://localhost:3000/health
+✅ Connected to PostgreSQL database
+Trip a693f24d-7c37-481f-a20b-9fc18834a165 cancelled by driver fd809b68-e2ae-48eb-9045-8926671e446d: Emergency
+✅ Connected to PostgreSQL database
+✅ Connected to PostgreSQL database
+[INFO] 21:14:07 Restarting: /Users/michaelburbage/Documents/Development/dryvrhub/backend/src/routes/trips.ts has been modified
+🚀 DryverHub API server running on http://localhost:3000
+📊 Health check: http://localhost:3000/health

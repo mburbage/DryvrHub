@@ -1,4 +1,4 @@
-import React from 'react';
+import React, {useState, useEffect} from 'react';
 import {
   View,
   Text,
@@ -6,41 +6,115 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
+  ActivityIndicator,
+  Platform,
 } from 'react-native';
-import {useData} from '../../contexts/DataContext';
+import {useAuth} from '../../contexts/AuthContext';
+
+const API_URL = Platform.OS === 'android' ? 'http://10.0.2.2:3000' : 'http://localhost:3000';
+
+interface Trip {
+  id: string;
+  rider_id: string;
+  pickup_address: string;
+  dropoff_address: string;
+  estimated_distance_miles: number | null;
+  scheduled_pickup_time: string;
+  notes: string | null;
+  status: string;
+  created_at: string;
+}
+
+interface Bid {
+  id: string;
+  driver_id: string;
+  bid_amount: string;
+  message: string | null;
+  status: string;
+  created_at: string;
+}
 
 const AcceptedRideScreen = ({route, navigation}: any) => {
-  const {rideId} = route.params;
-  const {getRideById, getBidsByRide, updateRideStatus} = useData();
-  const ride = getRideById(rideId);
-  const bids = getBidsByRide(rideId);
-  const acceptedBid = bids.find(bid => bid.id === ride?.acceptedBidId);
+  const {tripId} = route.params;
+  const {token} = useAuth();
+  const [trip, setTrip] = useState<Trip | null>(null);
+  const [acceptedBid, setAcceptedBid] = useState<Bid | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  if (!ride) {
-    return (
-      <View style={styles.container}>
-        <Text style={styles.errorText}>Ride not found</Text>
-      </View>
-    );
-  }
+  useEffect(() => {
+    fetchTripDetails();
+  }, [tripId]);
 
-  const handleMarkComplete = () => {
+  const fetchTripDetails = async () => {
+    try {
+      setLoading(true);
+      
+      // Fetch trip details
+      const tripResponse = await fetch(`${API_URL}/api/trips/${tripId}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!tripResponse.ok) {
+        throw new Error('Failed to fetch trip');
+      }
+
+      const tripData = await tripResponse.json();
+      setTrip(tripData);
+
+      // Fetch bids to find the accepted one
+      const bidsResponse = await fetch(`${API_URL}/api/trips/${tripId}/bids`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (bidsResponse.ok) {
+        const bidsData = await bidsResponse.json();
+        const accepted = bidsData.find((bid: Bid) => bid.status === 'accepted');
+        setAcceptedBid(accepted || null);
+      }
+    } catch (error) {
+      console.error('Error fetching trip details:', error);
+      Alert.alert('Error', 'Failed to load trip details');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCancelTrip = () => {
     Alert.alert(
-      'Complete Ride',
-      'Mark this ride as completed?',
+      'Cancel Trip',
+      'Are you sure you want to cancel this trip? This action cannot be undone.',
       [
-        {text: 'Cancel', style: 'cancel'},
+        {text: 'No', style: 'cancel'},
         {
-          text: 'Complete',
-          onPress: () => {
+          text: 'Yes, Cancel',
+          style: 'destructive',
+          onPress: async () => {
             try {
-              updateRideStatus(ride.id, 'COMPLETED');
-              Alert.alert('Success', 'Ride marked as completed!', [
+              const response = await fetch(`${API_URL}/api/trips/${tripId}/cancel`, {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${token}`,
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ reason: 'Cancelled by rider' }),
+              });
+
+              if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.error || 'Failed to cancel trip');
+              }
+
+              Alert.alert('Success', 'Trip cancelled successfully', [
                 {text: 'OK', onPress: () => navigation.goBack()},
               ]);
-            } catch (error) {
-              Alert.alert('Error', 'Failed to complete ride. Please try again.');
-              console.error('Failed to complete ride:', error);
+            } catch (error: any) {
+              Alert.alert('Error', error.message || 'Failed to cancel trip');
             }
           },
         },
@@ -48,18 +122,29 @@ const AcceptedRideScreen = ({route, navigation}: any) => {
     );
   };
 
+  if (loading) {
+    return (
+      <View style={[styles.container, styles.centerContent]}>
+        <ActivityIndicator size="large" color="#007AFF" />
+      </View>
+    );
+  }
+
+  if (!trip) {
+    return (
+      <View style={[styles.container, styles.centerContent]}>
+        <Text style={styles.errorText}>Trip not found</Text>
+      </View>
+    );
+  }
+
+
   return (
     <ScrollView style={styles.container}>
       <View style={styles.content}>
-        {ride.status === 'ACCEPTED' && (
+        {trip.status === 'accepted' && (
           <View style={styles.statusBanner}>
             <Text style={styles.statusText}>✓ Ride Confirmed</Text>
-          </View>
-        )}
-
-        {ride.status === 'COMPLETED' && (
-          <View style={[styles.statusBanner, styles.completedBanner]}>
-            <Text style={styles.statusText}>✓ Ride Completed</Text>
           </View>
         )}
 
@@ -67,15 +152,23 @@ const AcceptedRideScreen = ({route, navigation}: any) => {
           <Text style={styles.sectionTitle}>Trip Details</Text>
           <View style={styles.locationBlock}>
             <Text style={styles.locationLabel}>Pickup</Text>
-            <Text style={styles.locationText}>{ride.pickupAddress}</Text>
+            <Text style={styles.locationText}>{trip.pickup_address}</Text>
           </View>
           <View style={styles.locationBlock}>
             <Text style={styles.locationLabel}>Dropoff</Text>
-            <Text style={styles.locationText}>{ride.dropoffAddress}</Text>
+            <Text style={styles.locationText}>{trip.dropoff_address}</Text>
           </View>
+          {trip.estimated_distance_miles && (
+            <View style={styles.infoRow}>
+              <Text style={styles.label}>Distance</Text>
+              <Text style={styles.value}>{trip.estimated_distance_miles.toFixed(1)} mi</Text>
+            </View>
+          )}
           <View style={styles.infoRow}>
-            <Text style={styles.label}>Distance</Text>
-            <Text style={styles.value}>{ride.distanceKm} km</Text>
+            <Text style={styles.label}>Scheduled Pickup</Text>
+            <Text style={styles.value}>
+              {new Date(trip.scheduled_pickup_time).toLocaleString()}
+            </Text>
           </View>
         </View>
 
@@ -83,7 +176,7 @@ const AcceptedRideScreen = ({route, navigation}: any) => {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Accepted Price</Text>
             <Text style={styles.priceText}>
-              ${acceptedBid.priceAmount.toFixed(2)}
+              ${parseFloat(acceptedBid.bid_amount).toFixed(2)}
             </Text>
             {acceptedBid.message && (
               <View style={styles.messageBlock}>
@@ -94,44 +187,25 @@ const AcceptedRideScreen = ({route, navigation}: any) => {
           </View>
         )}
 
-        {ride.notes && (
+        {trip.notes && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Your Notes</Text>
-            <Text style={styles.notesText}>{ride.notes}</Text>
+            <Text style={styles.notesText}>{trip.notes}</Text>
           </View>
         )}
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Timeline</Text>
-          <View style={styles.infoRow}>
-            <Text style={styles.label}>Posted</Text>
-            <Text style={styles.value}>
-              {new Date(ride.createdAt).toLocaleString()}
-            </Text>
-          </View>
-          {ride.acceptedAt && (
-            <View style={styles.infoRow}>
-              <Text style={styles.label}>Accepted</Text>
-              <Text style={styles.value}>
-                {new Date(ride.acceptedAt).toLocaleString()}
-              </Text>
-            </View>
-          )}
-          {ride.completedAt && (
-            <View style={styles.infoRow}>
-              <Text style={styles.label}>Completed</Text>
-              <Text style={styles.value}>
-                {new Date(ride.completedAt).toLocaleString()}
-              </Text>
-            </View>
-          )}
+          <Text style={styles.sectionTitle}>Posted</Text>
+          <Text style={styles.value}>
+            {new Date(trip.created_at).toLocaleString()}
+          </Text>
         </View>
 
-        {ride.status === 'ACCEPTED' && (
+        {trip.status === 'accepted' && (
           <TouchableOpacity
-            style={styles.completeButton}
-            onPress={handleMarkComplete}>
-            <Text style={styles.completeButtonText}>Mark as Completed</Text>
+            style={styles.cancelButton}
+            onPress={handleCancelTrip}>
+            <Text style={styles.cancelButtonText}>Cancel Trip</Text>
           </TouchableOpacity>
         )}
 
@@ -151,6 +225,10 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f5f5f5',
   },
+  centerContent: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   content: {
     padding: 16,
   },
@@ -160,9 +238,6 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginBottom: 16,
     alignItems: 'center',
-  },
-  completedBanner: {
-    backgroundColor: '#666',
   },
   statusText: {
     fontSize: 18,
@@ -235,16 +310,19 @@ const styles = StyleSheet.create({
     color: '#000',
     lineHeight: 20,
   },
-  completeButton: {
-    backgroundColor: '#4CAF50',
+  cancelButton: {
+    backgroundColor: '#FFF',
     padding: 16,
     borderRadius: 8,
     alignItems: 'center',
     marginTop: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#FF3B30',
   },
-  completeButtonText: {
-    color: '#fff',
-    fontSize: 18,
+  cancelButtonText: {
+    color: '#FF3B30',
+    fontSize: 16,
     fontWeight: '600',
   },
   infoCard: {

@@ -8,29 +8,67 @@
 - **Framework:** React Native 0.83.1
 - **Language:** TypeScript
 - **Package Manager:** npm
+- **Backend:** Node.js/Express with TypeScript (port 3000)
 - **Database:** PostgreSQL 15 (local development)
+- **Authentication:** JWT tokens (7-day expiry), bcrypt password hashing
 - **iOS Dependencies:** CocoaPods via Bundler
-- **State Management:** React Context API (RoleContext, DataContext, SettingsContext)
+- **State Management:** React Context API (AuthContext, DataContext, SettingsContext)
 - **Navigation:** React Navigation (Stack + Bottom Tabs + Material Top Tabs)
 - **Image Handling:** react-native-image-picker
-- **Storage:** AsyncStorage for app state, PostgreSQL for data persistence
+- **Storage:** AsyncStorage for JWT tokens, PostgreSQL for data persistence
 
 ## Core Architecture Principles
 1. **No Ratings/Rankings:** Strictly marketplace model - no star ratings, no driver scores, no algorithmic ranking
 2. **Driver-Set Pricing:** Drivers submit custom bid amounts for each trip
 3. **Zero Commission:** Platform does not process payments or take commission
 4. **Verification Only:** Focus on identity/background/vehicle verification, not performance metrics
-5. **Local-First:** PostgreSQL local database, no cloud services yet
+5. **Marketplace Neutrality:** Platform does NOT rank or recommend drivers - all bids displayed equally with neutral chronological ordering
+6. **Local-First:** PostgreSQL local database, no cloud services yet
 
 ## Current Implementation Status
 
 ### ✅ Completed Features
 
-#### 1. User Role System
+#### 1. Authentication System
+- **Backend:** `/backend/src/services/authService.ts` - JWT-based auth with bcrypt hashing
+- **Middleware:** `/backend/src/middleware/auth.ts` - authenticate, requireRole, requireEmailVerified
+- **Routes:** `/backend/src/routes/auth.ts` - signup, login, logout, verify-email, password-reset
+- **Frontend:** 
+  - `/src/contexts/AuthContext.tsx` - Auth state management with AsyncStorage token persistence
+  - `/src/screens/auth/RoleSelectionScreen.tsx` - Choose driver or rider role
+  - `/src/screens/auth/SignUpScreen.tsx` - Email/password signup
+  - `/src/screens/auth/LoginScreen.tsx` - Email/password login
+  - `/src/navigation/AuthNavigator.tsx` - Auth flow orchestration
+- **Features:**
+  - JWT tokens with 7-day expiry
+  - Separate driver/rider accounts (no role switching)
+  - Email verification tokens (single-use)
+  - Password reset functionality
+  - Logout with token cleanup
+- **Test Accounts:**
+  - Driver: `testdriver1@example.com` / `password123`
+  - Rider: `testrider@example.com` / `password123`
+
+#### 2. Neutral Rider Bid Viewing System
+- **Backend:** `/backend/src/routes/trips.ts`
+  - `GET /api/trips/:id/bids` - Returns ALL bids ordered by `created_at ASC` (oldest first)
+  - `POST /api/trips/:id/accept-bid` - Transaction-based acceptance, rejects other bids
+  - Neutral driver context: account_age_days, completed_trip_count, verification booleans only
+- **Frontend:** `/src/screens/rider/ViewBidsScreen.tsx`
+  - Displays all bids with identical card styling
+  - No price highlighting or bid ranking
+  - Neutral verification indicators (✓ Identity Verified, ✓ Background Check, ✓ Vehicle Verified)
+  - Explicit acceptance confirmation via Alert
+  - No sorting controls or algorithmic influence
+- **Rules Enforced:**
+  - Platform does NOT rank or recommend drivers
+  - All bids displayed equally with same styling
+  - Rider makes explicit, manual decision
+  - No scoring, filtering, or behavioral analysis
+
+#### 3. User Role System (Legacy - Being Phased Out)
 - **File:** `/src/contexts/RoleContext.tsx`
-- Dual role support (rider/driver)
-- Role switching functionality
-- Persistent role storage via AsyncStorage
+- Note: Role switching removed from profile screens - users now have separate authenticated accounts
 
 #### 2. Driver Profile Management
 - **Files:** 
@@ -158,57 +196,52 @@ created_at TIMESTAMP DEFAULT NOW()
 - Seed data: `/db/seed.sql` (5 drivers, 3 vehicles), `/db/seed_core.sql` (3 riders, 5 trips, 6 bids)
 - Documentation: `/db/README.md`
 - Environment template: `/.env.example`
+- **Auth Fields Added:** `password_hash`, `email_verified`, `verification_token`, `reset_token`, `reset_token_expires`
 
-#### 5. Navigation Structure
+#### 5. Backend API Server
+- **Status:** ✅ Running on `http://localhost:3000`
+- **Structure:**
+  - `/backend/src/index.ts` - Express server setup with CORS
+  - `/backend/src/db.ts` - PostgreSQL connection pool
+  - `/backend/src/routes/auth.ts` - Authentication endpoints
+  - `/backend/src/routes/trips.ts` - Trip and bid management
+  - `/backend/src/routes/bids.ts` - Bid submission (requires email verification)
+- **Endpoints Tested:**
+  - ✅ POST `/api/auth/signup` - Create account (driver/rider)
+  - ✅ POST `/api/auth/login` - Email/password authentication
+  - ✅ POST `/api/auth/logout` - Client-side token deletion
+  - ✅ GET `/api/auth/verify-email/:token` - Email verification
+  - ✅ POST `/api/trips` - Create new trip (riders only)
+  - ✅ GET `/api/trips/:id/bids` - View all bids with neutral ordering
+  - ✅ POST `/api/trips/:id/accept-bid` - Accept bid with transaction logic
+
+#### 6. Navigation Structure
 **Driver Tab Navigator** (`/src/navigation/DriverNavigator.tsx`):
 - Home: Trip marketplace (view open trips, submit bids)
 - My Trips: Active and past trips
 - Earnings: Trip history and earnings summary (no payment processing)
 - Profile: Driver profile and settings
 
-**Rider Tab Navigator** (assumed similar structure):
-- Request rides
-- View active trips
-- View past trips
-- Settings
+**Rider Tab Navigator** (`/src/navigation/RiderNavigator.tsx`):
+- Ride Board: View open trips and bids
+- Post Ride: Create new trip request
+- View Bids: See all bids with neutral display
+- Profile: Rider profile and settings
 
 ### 🚧 Known Issues
 
-#### iOS Build Issue
-**Error:** `bundle exec pod install` fails with exit code 5
-**Context:** Last attempted in `/ios` directory
-**Status:** Needs investigation
-
-#### Android Build Issue
-**Error:** `npm run android` fails with exit code 1
-**Status:** Needs investigation
+None currently - iOS/Android build issues resolved, backend server running successfully.
 
 ### 📋 Next Steps (Priority Order)
 
-1. **Fix Build Issues**
-   - Debug iOS CocoaPods installation failure
-   - Debug Android build failure
-   - Verify Metro bundler can start successfully
-
-2. **Backend API Development**
-   - Create Node.js/Express backend
-   - Connect to PostgreSQL database
-   - RESTful API endpoints for:
-     - User authentication (riders/drivers)
-     - Trip CRUD operations
-     - Bid submission and management
-     - Message exchange
-     - Verification status checks
-     - Report submission
-
-3. **React Native Data Integration**
+1. **React Native Data Integration**
    - Replace mock data in DataContext with API calls
-   - Implement trip listing screen (fetch from database)
-   - Implement bid submission flow
+   - Implement driver bid submission flow
    - Real-time trip status updates
    - Message notifications
+   - Connect remaining screens to backend
 
-4. **External API Integration**
+2. **External API Integration**
    - **Persona Identity Verification:**
      - Production SDK setup
      - Webhook handler for verification results
@@ -298,14 +331,24 @@ created_at TIMESTAMP DEFAULT NOW()
 - `.github/copilot-instructions.md` - Project context for AI assistance
 
 ## Git Commit History (Recent)
-1. **Vehicle Photos:** Added photo upload for up to 3 vehicle images
-2. **Verification System:** Implemented three-tier verification (identity, background, vehicle)
-3. **Database Setup:** PostgreSQL installation, verification schema, seed data
-4. **Core Marketplace Schema:** Added riders, trips, bids, messages, reports, admin_flags tables
+1. **Authentication System:** JWT-based auth with email/password, signup/login screens, AuthContext
+2. **Neutral Bid Viewing:** GET/POST endpoints with chronological ordering, ViewBidsScreen with identical card styling
+3. **Remove Role Switching:** Removed switch buttons from profile screens - users now have separate driver/rider accounts
+4. **Vehicle Photos:** Added photo upload for up to 3 vehicle images
+5. **Verification System:** Implemented three-tier verification (identity, background, vehicle)
+6. **Database Setup:** PostgreSQL installation, verification schema, seed data
+7. **Core Marketplace Schema:** Added riders, trips, bids, messages, reports, admin_flags tables
 
 ## Development Commands
 
-### Start Development
+### Backend Server
+```bash
+cd backend
+npm run dev                  # Start backend server (port 3000)
+npm run build                # Build TypeScript to JavaScript
+```
+
+### React Native App
 ```bash
 npm start                    # Start Metro bundler
 npm run ios                  # Run iOS app
@@ -330,16 +373,27 @@ cd ..
 ```bash
 npm test                    # Run Jest tests
 npm run lint                # Run ESLint
+
+# Backend API testing with curl
+curl -X POST http://localhost:3000/api/auth/signup \
+  -H "Content-Type: application/json" \
+  -d '{"email":"test@example.com","password":"password123","role":"rider"}'
 ```
+
+## Test Accounts
+- **Driver:** `testdriver1@example.com` / `password123`
+- **Rider:** `testrider@example.com` / `password123`
 
 ## Non-Negotiable Rules
 
 1. **NO RATINGS OR RANKINGS** - Ever. This is a marketplace, not a gig platform.
-2. **NO COMMISSION** - Platform does not handle payments or take cuts.
-3. **DRIVER-SET PRICING** - Drivers submit custom bid amounts for each trip.
-4. **NO REAL-TIME TRACKING** - Pickup/dropoff addresses only, no GPS tracking during trip.
-5. **VERIFICATION ONLY** - Status fields are binary (verified/not verified), never scored.
-6. **NO ALGORITHMS** - No matching algorithms, no driver sorting, pure marketplace bidding.
+2. **MARKETPLACE NEUTRALITY** - Platform does NOT rank or recommend drivers. All bids displayed equally.
+3. **NO COMMISSION** - Platform does not handle payments or take cuts.
+4. **DRIVER-SET PRICING** - Drivers submit custom bid amounts for each trip.
+5. **NO REAL-TIME TRACKING** - Pickup/dropoff addresses only, no GPS tracking during trip.
+6. **VERIFICATION ONLY** - Status fields are binary (verified/not verified), never scored.
+7. **NO ALGORITHMS** - No matching algorithms, no driver sorting, pure marketplace bidding with neutral chronological ordering.
+8. **EXPLICIT SELECTION** - Riders make manual, explicit decisions. No auto-accept, no nudging.
 
 ## Key Context for Future Development
 

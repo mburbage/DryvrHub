@@ -9,23 +9,29 @@ router.get('/', async (req: Request, res: Response) => {
   try {
     const { status, rider_id } = req.query;
     
-    let query = 'SELECT * FROM trips';
+    let query = `
+      SELECT 
+        t.*,
+        COUNT(b.id) as bid_count
+      FROM trips t
+      LEFT JOIN bids b ON t.id = b.trip_id
+    `;
     const params: any[] = [];
     
     if (status || rider_id) {
       query += ' WHERE';
       if (status) {
         params.push(status);
-        query += ` status = $${params.length}`;
+        query += ` t.status = $${params.length}`;
       }
       if (rider_id) {
         if (params.length > 0) query += ' AND';
         params.push(rider_id);
-        query += ` rider_id = $${params.length}`;
+        query += ` t.rider_id = $${params.length}`;
       }
     }
     
-    query += ' ORDER BY created_at DESC';
+    query += ' GROUP BY t.id ORDER BY t.created_at DESC';
     
     const result = await pool.query(query, params);
     res.json(result.rows);
@@ -320,6 +326,106 @@ router.post('/:id/accept-bid', authenticate, requireRole('rider'), async (req: R
   } catch (error) {
     console.error('Error accepting bid:', error);
     res.status(500).json({ error: 'Failed to accept bid' });
+  }
+});
+
+// POST /api/trips/:id/cancel - Cancel a trip (rider or driver)
+// RULE: Riders can cancel their own trips
+// RULE: Drivers can cancel trips they've accepted
+router.post('/:id/cancel', authenticate, async (req: Request, res: Response) => {
+  try {
+    const { id: tripId } = req.params;
+    const userId = req.user!.id;
+    const userRole = req.user!.role;
+    const { reason } = req.body; // Optional cancellation reason
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // Get trip details
+      const tripResult = await client.query(
+        'SELECT * FROM trips WHERE id = $1 FOR UPDATE',
+        [tripId]
+      );
+
+      if (tripResult.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({ error: 'Trip not found' });
+      }
+
+      const trip = tripResult.rows[0];
+
+      // Verify authorization based on role
+      if (userRole === 'rider') {
+        // Rider must own the trip
+        if (trip.rider_id !== userId) {
+          await client.query('ROLLBACK');
+          return res.status(403).json({ error: 'Not authorized to cancel this trip' });
+        }
+      } else if (userRole === 'driver') {
+        // Driver must have an accepted bid for this trip
+        const acceptedBidResult = await client.query(
+          'SELECT id FROM bids WHERE trip_id = $1 AND driver_id = $2 AND status = $3',
+          [tripId, userId, 'accepted']
+        );
+
+        if (acceptedBidResult.rows.length === 0) {
+          await client.query('ROLLBACK');
+          return res.status(403).json({ error: 'Not authorized to cancel this trip' });
+        }
+      } else {
+        await client.query('ROLLBACK');
+        return res.status(403).json({ error: 'Invalid user role' });
+      }
+
+      // Check if trip can be cancelled
+      if (trip.status === 'cancelled') {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: 'Trip is already cancelled' });
+      }
+
+      if (trip.status === 'completed') {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: 'Cannot cancel a completed trip' });
+      }
+
+      // Cancel the trip
+      await client.query(
+        "UPDATE trips SET status = 'cancelled' WHERE id = $1",
+        [tripId]
+      );
+
+      // If trip was accepted, update the accepted bid status to withdrawn
+      if (trip.status === 'accepted') {
+        await client.query(
+          "UPDATE bids SET status = 'withdrawn' WHERE trip_id = $1 AND status = 'accepted'",
+          [tripId]
+        );
+      }
+
+      // Log cancellation reason if provided
+      if (reason) {
+        // TODO: Store cancellation reason in a cancellations table
+        console.log(`Trip ${tripId} cancelled by ${userRole} ${userId}: ${reason}`);
+      }
+
+      await client.query('COMMIT');
+
+      res.json({ 
+        message: 'Trip cancelled successfully',
+        trip_id: tripId,
+        cancelled_by: userRole
+      });
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    console.error('Error cancelling trip:', error);
+    res.status(500).json({ error: 'Failed to cancel trip', details: error instanceof Error ? error.message : 'Unknown error' });
   }
 });
 
