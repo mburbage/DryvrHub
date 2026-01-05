@@ -1,29 +1,11 @@
 import React from 'react';
-import {View, Text, StyleSheet, TouchableOpacity, Alert, ScrollView} from 'react-native';
-import {useRole} from '../../contexts/RoleContext';
+import {View, Text, StyleSheet, ScrollView} from 'react-native';
 import {useData} from '../../contexts/DataContext';
 
 const RiderProfileScreen = () => {
-  const {setRole} = useRole();
   const {getCurrentUser, getRiderProfile} = useData();
   const user = getCurrentUser();
   const profile = getRiderProfile(user.id);
-
-  const handleSwitchRole = () => {
-    Alert.alert(
-      'Switch to Driver',
-      'Are you sure you want to switch to Driver mode?',
-      [
-        {text: 'Cancel', style: 'cancel'},
-        {
-          text: 'Switch',
-          onPress: async () => {
-            await setRole('DRIVER');
-          },
-        },
-      ],
-    );
-  };
 
   const getAccountAge = () => {
     const daysSince = Math.floor(
@@ -78,10 +60,6 @@ const RiderProfileScreen = () => {
             </Text>
           </View>
         )}
-
-        <TouchableOpacity style={styles.button} onPress={handleSwitchRole}>
-          <Text style={styles.buttonText}>Switch to Driver Mode</Text>
-        </TouchableOpacity>
       </View>
     </ScrollView>
   );
@@ -135,18 +113,6 @@ const styles = StyleSheet.create({
     color: '#999',
     fontStyle: 'italic',
     marginTop: 4,
-  },
-  button: {
-    backgroundColor: '#007AFF',
-    padding: 15,
-    borderRadius: 8,
-    marginTop: 8,
-  },
-  buttonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-    textAlign: 'center',
   },
 });
 
