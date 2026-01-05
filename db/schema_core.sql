@@ -16,7 +16,12 @@ DROP TYPE IF EXISTS sender_type_enum;
 DROP TYPE IF EXISTS user_type_enum;
 
 -- Create enum types
-CREATE TYPE trip_status_enum AS ENUM ('open', 'accepted', 'en_route', 'arrived', 'in_progress', 'completed', 'payment_due', 'paid', 'cancelled', 'expired');
+-- Trip status flow: open → accepted → en_route → arrived → code_verified → in_progress → completed → rider_confirmed
+-- 'code_verified' = driver entered correct pickup code, awaiting rider payment confirmation
+-- 'in_progress' = rider confirmed payment, trip in progress
+-- 'completed' = driver marked trip finished (requires rider verification)
+-- 'rider_confirmed' = rider confirmed completion (final status)
+CREATE TYPE trip_status_enum AS ENUM ('open', 'accepted', 'en_route', 'arrived', 'code_verified', 'in_progress', 'completed', 'rider_confirmed', 'cancelled', 'expired');
 CREATE TYPE bid_status_enum AS ENUM ('submitted', 'withdrawn', 'accepted', 'rejected');
 CREATE TYPE sender_type_enum AS ENUM ('rider', 'driver');
 CREATE TYPE user_type_enum AS ENUM ('rider', 'driver');
@@ -74,6 +79,9 @@ CREATE TABLE trips (
     arrived_at TIMESTAMP,
     pickup_at TIMESTAMP,
     completed_at TIMESTAMP,
+    
+    -- Rider completion verification
+    rider_confirmed_at TIMESTAMP,
     
     -- Payment tracking
     payment_due_at TIMESTAMP,

@@ -1,5 +1,5 @@
 # DryverHub - Development Chat Summary
-**Last Updated:** January 4, 2026
+**Last Updated:** January 4, 2026 (Evening - Payment Flow Updated: Payment After Code Verification)
 
 ## Project Overview
 **DryverHub** is a driver-first, zero-commission ride marketplace mobile app built with React Native. Drivers set their own prices, and the platform operates as a pure marketplace with no algorithmic ranking or payment processing.
@@ -9,13 +9,14 @@
 - **Language:** TypeScript
 - **Package Manager:** npm
 - **Backend:** Node.js/Express with TypeScript (port 3000)
-- **Database:** PostgreSQL 15 (local development)
+- **Database:** PostgreSQL 15 (local development - `ride_marketplace_dev`)
 - **Authentication:** JWT tokens (7-day expiry), bcrypt password hashing
 - **iOS Dependencies:** CocoaPods via Bundler
 - **State Management:** React Context API (AuthContext, DataContext, SettingsContext)
 - **Navigation:** React Navigation (Stack + Bottom Tabs + Material Top Tabs)
 - **Image Handling:** react-native-image-picker
 - **Storage:** AsyncStorage for JWT tokens, PostgreSQL for data persistence
+- **Security:** SHA-256 hashing for pickup codes, bcrypt for passwords
 
 ## Core Architecture Principles
 1. **No Ratings/Rankings:** Strictly marketplace model - no star ratings, no driver scores, no algorithmic ranking
@@ -131,31 +132,50 @@ created_at TIMESTAMP DEFAULT NOW()
 
 **Core Marketplace Schema** (`/db/schema_core.sql`):
 ```sql
--- riders table (3 test records)
+-- riders table
 id UUID PRIMARY KEY
 email VARCHAR(255) UNIQUE NOT NULL
+password_hash TEXT NOT NULL
 email_verified BOOLEAN DEFAULT FALSE
+verification_token TEXT
+verification_expires_at TIMESTAMP
 phone_verified BOOLEAN DEFAULT FALSE
 created_at TIMESTAMP DEFAULT NOW()
 
--- trips table (5 test records: 2 open, 1 accepted, 1 expired, 1 cancelled)
+-- trips table
 id UUID PRIMARY KEY
 rider_id UUID REFERENCES riders(id)
 pickup_address TEXT NOT NULL
 dropoff_address TEXT NOT NULL
-pickup_lat DECIMAL(10, 8) NOT NULL
-pickup_lng DECIMAL(11, 8) NOT NULL
-dropoff_lat DECIMAL(10, 8) NOT NULL
-dropoff_lng DECIMAL(11, 8) NOT NULL
+pickup_lat DECIMAL(10, 8)
+pickup_lng DECIMAL(11, 8)
+dropoff_lat DECIMAL(10, 8)
+dropoff_lng DECIMAL(11, 8)
 estimated_distance_miles DECIMAL(6, 2)
 estimated_duration_minutes INTEGER
-scheduled_pickup_time TIMESTAMP NOT NULL
+scheduled_pickup_time TIMESTAMP
 notes TEXT
-status trip_status_enum DEFAULT 'open'  -- 'open' | 'accepted' | 'cancelled' | 'expired'
+status trip_status_enum DEFAULT 'open'
+  -- States: 'open' | 'payment_due' | 'accepted' | 'en_route' | 'arrived' | 
+  --         'in_progress' | 'paid' | 'cancelled' | 'expired'
 created_at TIMESTAMP DEFAULT NOW()
 expires_at TIMESTAMP NOT NULL
+-- Trip execution timestamps
+en_route_at TIMESTAMP
+arrived_at TIMESTAMP
+pickup_at TIMESTAMP
+completed_at TIMESTAMP
+-- Payment tracking
+payment_due_at TIMESTAMP
+paid_at TIMESTAMP
+final_amount DECIMAL(10, 2)
+-- Pickup verification
+pickup_code_hash TEXT
+-- Cancellation tracking
+cancelled_by TEXT
+cancelled_at TIMESTAMP
 
--- bids table (6 test records: 4 submitted, 1 accepted, 1 withdrawn)
+-- bids table
 id UUID PRIMARY KEY
 trip_id UUID REFERENCES trips(id)
 driver_id UUID NOT NULL  -- References drivers table
@@ -202,23 +222,100 @@ created_at TIMESTAMP DEFAULT NOW()
 - **Status:** ✅ Running on `http://localhost:3000`
 - **Structure:**
   - `/backend/src/index.ts` - Express server setup with CORS
-  - `/backend/src/db.ts` - PostgreSQL connection pool
+  - `/backend/src/config/database.ts` - PostgreSQL connection pool
+  - `/backend/src/services/authService.ts` - Auth logic with JWT/bcrypt
+  - `/backend/src/middleware/auth.ts` - authenticate, requireRole, requireEmailVerified
   - `/backend/src/routes/auth.ts` - Authentication endpoints
-  - `/backend/src/routes/trips.ts` - Trip and bid management
+  - `/backend/src/routes/trips.ts` - Trip and state management
   - `/backend/src/routes/bids.ts` - Bid submission (requires email verification)
-- **Endpoints Tested:**
-  - ✅ POST `/api/auth/signup` - Create account (driver/rider)
-  - ✅ POST `/api/auth/login` - Email/password authentication
-  - ✅ POST `/api/auth/logout` - Client-side token deletion
-  - ✅ GET `/api/auth/verify-email/:token` - Email verification
-  - ✅ POST `/api/trips` - Create new trip (riders only)
-  - ✅ GET `/api/trips/:id/bids` - View all bids with neutral ordering
-  - ✅ POST `/api/trips/:id/accept-bid` - Accept bid with transaction logic
+  - `/backend/src/utils/pickupCode.ts` - 4-digit code generation, hashing, verification
+
+**Trip Management Endpoints:**
+- ✅ POST `/api/trips` - Create new trip (riders only)
+- ✅ GET `/api/trips` - List all trips with filters
+- ✅ GET `/api/trips/:id` - Get single trip details
+- ✅ GET `/api/trips/:id/bids` - View all bids (neutral chronological order)
+- ✅ POST `/api/trips/:id/accept-bid` - Accept bid → payment_due status + pickup code
+- ✅ POST `/api/trips/:id/cancel` - Cancel trip (rider/driver authorization)
+- ✅ POST `/api/trips/:id/confirm-payment` - Rider confirms payment → accepted status
+
+**Trip Execution Endpoints (Driver):**
+- ✅ POST `/api/trips/:id/start-en-route` - Driver heading to pickup
+- ✅ POST `/api/trips/:id/arrived` - Driver at pickup location
+- ✅ POST `/api/trips/:id/verify-pickup` - Validate code (non-state-changing)
+- ✅ POST `/api/trips/:id/start-trip` - Driver enters code → code_verified status (awaits rider payment)
+- ✅ POST `/api/trips/:id/complete` - Driver marks trip finished → completed status
+
+**Trip Payment Endpoints (Rider):**
+- ✅ POST `/api/trips/:id/confirm-payment` - Rider confirms payment after code verification → in_progress
+- ✅ POST `/api/trips/:id/confirm-completion` - Rider confirms successful completion → rider_confirmed (final)
+
+**Authentication Endpoints:**
+- ✅ POST `/api/auth/signup` - Create account (driver/rider)
+- ✅ POST `/api/auth/login` - Email/password authentication
+- ✅ POST `/api/auth/logout` - Client-side token deletion
+- ✅ GET `/api/auth/verify-email/:token` - Email verification
+- ✅ POST `/api/auth/reset-password` - Password reset flow
 
 #### 6. Navigation Structure
 **Driver Tab Navigator** (`/src/navigation/DriverNavigator.tsx`):
 - Home: Trip marketplace (view open trips, submit bids)
 - My Trips: Active and past trips
+#### 6. Trip Execution Flow (Rider-Protected Payment Model)
+
+**State Machine:** Linear progression enforced server-side
+```
+1. Bid Accepted → accepted (pickup code generated)
+2. Driver En Route → en_route
+3. Driver Arrived → arrived
+4. Code Verified → code_verified (driver verified presence, awaiting rider payment)
+5. Payment Confirmed → in_progress (rider confirms payment AFTER seeing driver)
+6. Driver Completes → completed (awaiting rider confirmation)
+7. Rider Confirms → rider_confirmed (final status)
+```
+
+**Pickup Code Security:**
+- 4-digit numeric code (0000-9999)
+- SHA-256 hashed storage in database
+- Generated on bid acceptance, shown to rider only
+- Driver must enter correct code to verify pickup
+- Code verification sets `code_verified` status - trip does NOT start yet
+- No lockout on failed attempts (MVP)
+
+**Payment Flow (Rider Protection):**
+- Payment occurs AFTER driver verifies pickup code
+- Rider receives notification when driver enters correct code
+- Rider confirms payment only after physically seeing the driver
+- Payment confirmation starts the trip (`in_progress` status)
+- Cannot cancel once trip is `in_progress`, `completed`, or `rider_confirmed`
+
+**Completion Verification (Two-Step Process):**
+- **Step 1 (Driver):** Driver calls `/complete` → status changes to `completed`
+  - Sets `completed_at` timestamp
+  - Rider receives notification to verify completion
+- **Step 2 (Rider):** Rider calls `/confirm-completion` → status changes to `rider_confirmed`
+  - Sets `rider_confirmed_at` timestamp
+  - Trip finalized, cannot be disputed
+  - Provides accountability for both parties
+
+**Timestamp Tracking:**
+- `en_route_at` - Driver heading to pickup
+- `arrived_at` - Driver at pickup location  
+- `pickup_at` - Driver entered correct pickup code (code_verified status)
+- `paid_at` - Rider confirmed payment (in_progress status)
+- `completed_at` - Driver marked trip finished
+- `rider_confirmed_at` - Rider verified successful completion
+
+**Authorization Rules:**
+- Riders: can cancel own trips (except in_progress/completed/rider_confirmed), must confirm payment and completion
+- Drivers: can cancel accepted trips, execute state transitions, verify pickup, mark as completed
+- All state changes require proper status validation
+- No skipping steps in the state machine
+- No skipping steps in the state machine
+
+#### 7. Navigation Structure
+**Driver Tab Navigator** (`/src/navigation/DriverNavigator.tsx`):
+- Home: Trip marketplace (view open trips, submit bids)
 - Earnings: Trip history and earnings summary (no payment processing)
 - Profile: Driver profile and settings
 
@@ -230,18 +327,24 @@ created_at TIMESTAMP DEFAULT NOW()
 
 ### 🚧 Known Issues
 
-None currently - iOS/Android build issues resolved, backend server running successfully.
+None currently - iOS/Android build issues resolved, backend server running successfully, trip execution flow fully implemented and tested.
 
 ### 📋 Next Steps (Priority Order)
 
-1. **React Native Data Integration**
+1. **Mobile UI for Trip Execution**
+   - Driver screen: action buttons for each state transition
+   - Rider screen: display pickup code, payment notice, trip status
+   - Real-time status updates via polling or websockets
+   - Payment confirmation UI with amount display
+   - Pickup code entry interface for drivers
+
+2. **React Native Data Integration**
    - Replace mock data in DataContext with API calls
    - Implement driver bid submission flow
-   - Real-time trip status updates
-   - Message notifications
    - Connect remaining screens to backend
+   - Trip status polling/updates
 
-2. **External API Integration**
+3. **External API Integration**
    - **Persona Identity Verification:**
      - Production SDK setup
      - Webhook handler for verification results
@@ -253,20 +356,20 @@ None currently - iOS/Android build issues resolved, backend server running succe
      - Webhook handler for check results
      - Status updates in database
 
-5. **Admin Dashboard** (Web-based)
+4. **Admin Dashboard** (Web-based)
    - Vehicle verification review interface
    - View uploaded documents (DMV registration, insurance, photos)
    - Approve/reject vehicle verification
    - Review safety reports
    - Manage admin flags
 
-6. **Geolocation Features**
+5. **Geolocation Features**
    - Package installed: `@react-native-community/geolocation`
    - Implement pickup/dropoff location picker
    - Calculate distance/duration estimates
    - Display trip on map (optional, not real-time tracking)
 
-7. **Enhanced Features**
+6. **Enhanced Features**
    - Push notifications for new bids/messages
    - Trip expiration handling
    - Bid withdrawal functionality

@@ -311,20 +311,20 @@ router.post('/:id/accept-bid', authenticate, requireRole('rider'), async (req: R
       const pickupCode = generatePickupCode();
       const codeHash = hashPickupCode(pickupCode);
 
-      // Update trip to payment_due status (payment required before trip starts)
+      // Update trip to accepted status (driver accepted, ready for pickup)
       await client.query(
-        "UPDATE trips SET status = 'payment_due', pickup_code_hash = $2, payment_due_at = NOW(), final_amount = $3 WHERE id = $1",
+        "UPDATE trips SET status = 'accepted', pickup_code_hash = $2, final_amount = $3 WHERE id = $1",
         [tripId, codeHash, finalAmount]
       );
 
       await client.query('COMMIT');
 
       res.json({ 
-        message: 'Bid accepted - payment due before trip',
+        message: 'Bid accepted - driver will head to pickup location',
         trip_id: tripId,
         bid_id: bid_id,
         pickup_code: pickupCode,
-        status: 'payment_due',
+        status: 'accepted',
         final_amount: finalAmount
       });
     } catch (error) {
@@ -652,17 +652,18 @@ router.post('/:id/start-trip', authenticate, requireRole('driver'), async (req: 
         return res.status(400).json({ error: 'Invalid pickup code' });
       }
 
-      // Update trip status to in_progress
+      // Update trip status to code_verified (driver verified, awaiting rider payment confirmation)
       await client.query(
-        "UPDATE trips SET status = 'in_progress', pickup_at = NOW() WHERE id = $1",
+        "UPDATE trips SET status = 'code_verified', pickup_at = NOW() WHERE id = $1",
         [tripId]
       );
 
       await client.query('COMMIT');
 
       res.json({ 
-        message: 'Trip started successfully',
-        trip_id: tripId
+        message: 'Pickup code verified - awaiting rider payment confirmation',
+        trip_id: tripId,
+        status: 'code_verified'
       });
     } catch (error) {
       await client.query('ROLLBACK');
@@ -704,18 +705,18 @@ router.post('/:id/complete', authenticate, requireRole('driver'), async (req: Re
         return res.status(403).json({ error: 'You do not have an accepted bid for this trip or trip is not in progress' });
       }
 
-      // Update trip status to paid (trip completed, final status)
+      // Update trip status to completed (driver finished, awaiting rider confirmation)
       await client.query(
-        "UPDATE trips SET status = 'paid', completed_at = NOW() WHERE id = $1",
+        "UPDATE trips SET status = 'completed', completed_at = NOW() WHERE id = $1",
         [tripId]
       );
 
       await client.query('COMMIT');
 
       res.json({ 
-        message: 'Trip completed successfully',
+        message: 'Trip marked as completed - awaiting rider verification',
         trip_id: tripId,
-        status: 'paid'
+        status: 'completed'
       });
     } catch (error) {
       await client.query('ROLLBACK');
@@ -726,6 +727,71 @@ router.post('/:id/complete', authenticate, requireRole('driver'), async (req: Re
   } catch (error) {
     console.error('Error completing trip:', error);
     res.status(500).json({ error: 'Failed to complete trip' });
+  }
+});
+
+// POST /api/trips/:id/confirm-completion - Rider confirms trip was completed successfully
+// RULE: Only the rider who owns the trip can confirm completion
+// RULE: Trip must be in 'completed' status (driver has finished)
+router.post('/:id/confirm-completion', authenticate, requireRole('rider'), async (req: Request, res: Response) => {
+  try {
+    const { id: tripId } = req.params;
+    const riderId = req.user!.id;
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // Get trip and verify rider owns it
+      const tripResult = await client.query(
+        `SELECT * FROM trips WHERE id = $1 FOR UPDATE`,
+        [tripId]
+      );
+
+      if (tripResult.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({ error: 'Trip not found' });
+      }
+
+      const trip = tripResult.rows[0];
+
+      // Verify rider owns the trip
+      if (trip.rider_id !== riderId) {
+        await client.query('ROLLBACK');
+        return res.status(403).json({ error: 'Not authorized to confirm completion for this trip' });
+      }
+
+      // Verify trip is in completed state (driver finished)
+      if (trip.status !== 'completed') {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ 
+          error: `Cannot confirm completion from status: ${trip.status}`,
+          message: 'Trip must be completed by driver first'
+        });
+      }
+
+      // Update trip to rider_confirmed status (rider verified, final status)
+      await client.query(
+        "UPDATE trips SET status = 'rider_confirmed', rider_confirmed_at = NOW() WHERE id = $1",
+        [tripId]
+      );
+
+      await client.query('COMMIT');
+
+      res.json({ 
+        message: 'Trip completion confirmed - trip finalized',
+        trip_id: tripId,
+        status: 'rider_confirmed'
+      });
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    console.error('Error confirming trip completion:', error);
+    res.status(500).json({ error: 'Failed to confirm trip completion' });
   }
 });
 
@@ -758,24 +824,27 @@ router.post('/:id/confirm-payment', authenticate, requireRole('rider'), async (r
         return res.status(403).json({ error: 'Not authorized to confirm payment for this trip' });
       }
 
-      // Verify trip is in payment_due state
-      if (trip.status !== 'payment_due') {
+      // Verify trip is in code_verified state (driver verified pickup, awaiting payment)
+      if (trip.status !== 'code_verified') {
         await client.query('ROLLBACK');
-        return res.status(400).json({ error: `Cannot confirm payment from status: ${trip.status}` });
+        return res.status(400).json({ 
+          error: `Cannot confirm payment from status: ${trip.status}`,
+          message: 'Driver must verify pickup code first'
+        });
       }
 
-      // Update trip to accepted (payment confirmed, ready to start trip)
+      // Update trip to in_progress (payment confirmed, trip starting)
       await client.query(
-        "UPDATE trips SET status = 'accepted', paid_at = NOW() WHERE id = $1",
+        "UPDATE trips SET status = 'in_progress', paid_at = NOW() WHERE id = $1",
         [tripId]
       );
 
       await client.query('COMMIT');
 
       res.json({ 
-        message: 'Payment confirmed - trip ready to start',
+        message: 'Payment confirmed - trip in progress',
         trip_id: tripId,
-        status: 'accepted'
+        status: 'in_progress'
       });
     } catch (error) {
       await client.query('ROLLBACK');
