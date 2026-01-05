@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { RoleSelectionScreen } from './RoleSelectionScreen';
-import { SignUpScreen } from './SignUpScreen';
-import { LoginScreen } from './LoginScreen';
+import { RoleSelectionScreen } from '../screens/auth/RoleSelectionScreen';
+import { SignUpScreen } from '../screens/auth/SignUpScreen';
+import { LoginScreen } from '../screens/auth/LoginScreen';
 import { Alert } from 'react-native';
 
 /**

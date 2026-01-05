@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,41 +6,109 @@ import {
   FlatList,
   TouchableOpacity,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
-import {useData} from '../../contexts/DataContext';
-import {Bid} from '../../models';
+import { useAuth } from '../../contexts/AuthContext';
+import { Platform } from 'react-native';
+
+/**
+ * ViewBidsScreen - Rider views all bids for their trip
+ * 
+ * RULES ENFORCED:
+ * - All bids displayed equally (same styling)
+ * - No sorting controls or price highlighting
+ * - No recommendations or "best" labels
+ * - Neutral verification indicators only
+ * - Explicit manual selection required
+ * - No time pressure or nudging
+ */
+
+interface BidData {
+  id: string;
+  driver_id: string;
+  bid_amount: string;
+  message: string | null;
+  status: string;
+  created_at: string;
+  driver_context: {
+    account_age_days: number;
+    completed_trip_count: number;
+    identity_verified: boolean;
+    background_check_completed: boolean;
+    vehicle_verified: boolean;
+  };
+}
 
 const ViewBidsScreen = ({route, navigation}: any) => {
   const {rideId} = route.params;
-  const {getRideById, getBidsByRide, updateRideStatus, blockUser, reportUser, isUserBlocked} = useData();
-  const ride = getRideById(rideId);
-  const bids = getBidsByRide(rideId);
+  const {token} = useAuth();
+  const [bids, setBids] = useState<BidData[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isAccepting, setIsAccepting] = useState(false);
 
-  if (!ride) {
-    return (
-      <View style={styles.container}>
-        <Text style={styles.errorText}>Ride not found</Text>
-      </View>
-    );
-  }
+  const API_BASE_URL = Platform.OS === 'android' 
+    ? 'http://10.0.2.2:3000' 
+    : 'http://localhost:3000';
 
-  const handleAcceptBid = (bid: Bid) => {
+  useEffect(() => {
+    fetchBids();
+  }, [rideId]);
+
+  const fetchBids = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/trips/${rideId}/bids`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch bids');
+      }
+
+      const data = await response.json();
+      setBids(data);
+    } catch (error) {
+      console.error('Error fetching bids:', error);
+      Alert.alert('Error', 'Failed to load bids');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleAcceptBid = (bid: BidData) => {
+    // RULE: Explicit confirmation required, no auto-accept
     Alert.alert(
       'Accept Bid',
-      `Accept this bid for $${bid.priceAmount.toFixed(2)}?`,
+      `Accept this bid for $${parseFloat(bid.bid_amount).toFixed(2)}?\n\nThis action cannot be undone.`,
       [
         {text: 'Cancel', style: 'cancel'},
         {
           text: 'Accept',
-          onPress: () => {
+          onPress: async () => {
+            setIsAccepting(true);
             try {
-              updateRideStatus(ride.id, 'ACCEPTED', bid.id);
-              Alert.alert('Success', 'Bid accepted! The driver has been notified.', [
+              const response = await fetch(`${API_BASE_URL}/api/trips/${rideId}/accept-bid`, {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${token}`,
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ bid_id: bid.id }),
+              });
+
+              if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.error || 'Failed to accept bid');
+              }
+
+              Alert.alert('Success', 'Bid accepted successfully!', [
                 {text: 'OK', onPress: () => navigation.goBack()},
               ]);
-            } catch (error) {
-              Alert.alert('Error', 'Failed to accept bid. Please try again.');
-              console.error('Failed to accept bid:', error);
+            } catch (error: any) {
+              Alert.alert('Error', error.message || 'Failed to accept bid');
+            } finally {
+              setIsAccepting(false);
             }
           },
         },
@@ -48,125 +116,107 @@ const ViewBidsScreen = ({route, navigation}: any) => {
     );
   };
 
-  const handleBlockDriver = (driverId: string) => {
-    Alert.alert(
-      'Block Driver',
-      'You will no longer see bids from this driver. Continue?',
-      [
-        {text: 'Cancel', style: 'cancel'},
-        {
-          text: 'Block',
-          style: 'destructive',
-          onPress: () => {
-            blockUser(driverId);
-            Alert.alert('Blocked', 'You will no longer see bids from this driver.');
-          },
-        },
-      ],
+  // RULE: Neutral empty state, no pressure
+  if (isLoading) {
+    return (
+      <View style={styles.centerContainer}>
+        <ActivityIndicator size="large" color="#007AFF" />
+      </View>
     );
-  };
+  }
 
-  const handleReportDriver = (driverId: string) => {
-    Alert.prompt(
-      'Report Driver',
-      'Please provide a reason for this report:',
-      [
-        {text: 'Cancel', style: 'cancel'},
-        {
-          text: 'Report',
-          onPress: (reason?: string) => {
-            if (reason && reason.trim()) {
-              reportUser(driverId, reason.trim());
-              Alert.alert('Reported', 'Thank you for your report. We will review it.');
-            }
-          },
-        },
-      ],
-      'plain-text',
+  if (bids.length === 0) {
+    return (
+      <View style={styles.centerContainer}>
+        <Text style={styles.emptyText}>No bids yet</Text>
+        <Text style={styles.emptySubtext}>Check back later</Text>
+      </View>
     );
-  };
+  }
 
-  const renderBidItem = ({item}: {item: Bid}) => {
-    const isBlocked = isUserBlocked(item.driverId);
-    
+  const renderBid = ({item: bid}: {item: BidData}) => {
+    const ctx = bid.driver_context;
+
     return (
       <View style={styles.bidCard}>
+        {/* RULE: Price displayed plainly, no highlighting */}
         <View style={styles.bidHeader}>
-          <Text style={styles.bidPrice}>${item.priceAmount.toFixed(2)}</Text>
-          <Text style={styles.bidTime}>
-            {new Date(item.createdAt).toLocaleString()}
+          <Text style={styles.bidAmount}>${parseFloat(bid.bid_amount).toFixed(2)}</Text>
+          <Text style={styles.bidDate}>
+            {new Date(bid.created_at).toLocaleDateString()}
           </Text>
         </View>
 
-        {item.message && (
-          <Text style={styles.bidMessage}>{item.message}</Text>
+        {/* RULE: Optional driver message */}
+        {bid.message && (
+          <Text style={styles.bidMessage}>{bid.message}</Text>
         )}
 
-        {ride.status === 'OPEN' && !isBlocked && (
-          <TouchableOpacity
-            style={styles.acceptButton}
-            onPress={() => handleAcceptBid(item)}>
-            <Text style={styles.acceptButtonText}>Accept This Bid</Text>
-          </TouchableOpacity>
-        )}
+        {/* RULE: Neutral verification indicators only (no scores, no ratings) */}
+        <View style={styles.verificationSection}>
+          <Text style={styles.verificationTitle}>Driver Information</Text>
+          
+          <View style={styles.verificationRow}>
+            <Text style={styles.verificationLabel}>Account age:</Text>
+            <Text style={styles.verificationValue}>{ctx.account_age_days} days</Text>
+          </View>
 
-        <View style={styles.bidActions}>
-          <TouchableOpacity
-            style={[styles.bidActionButton, styles.reportButton]}
-            onPress={() => handleReportDriver(item.driverId)}>
-            <Text style={styles.bidActionText}>Report</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.bidActionButton, styles.blockButton]}
-            onPress={() => handleBlockDriver(item.driverId)}>
-            <Text style={styles.bidActionText}>
-              {isBlocked ? 'Blocked' : 'Block'}
-            </Text>
-          </TouchableOpacity>
+          <View style={styles.verificationRow}>
+            <Text style={styles.verificationLabel}>Completed trips:</Text>
+            <Text style={styles.verificationValue}>{ctx.completed_trip_count}</Text>
+          </View>
+
+          {/* RULE: Boolean verification flags only, no quality judgments */}
+          <View style={styles.verificationFlags}>
+            {ctx.identity_verified && (
+              <View style={styles.verificationBadge}>
+                <Text style={styles.badgeText}>✓ Identity Verified</Text>
+              </View>
+            )}
+            {ctx.background_check_completed && (
+              <View style={styles.verificationBadge}>
+                <Text style={styles.badgeText}>✓ Background Check</Text>
+              </View>
+            )}
+            {ctx.vehicle_verified && (
+              <View style={styles.verificationBadge}>
+                <Text style={styles.badgeText}>✓ Vehicle Verified</Text>
+              </View>
+            )}
+          </View>
         </View>
+
+        {/* RULE: Explicit accept button, same for all bids */}
+        <TouchableOpacity
+          style={styles.acceptButton}
+          onPress={() => handleAcceptBid(bid)}
+          disabled={isAccepting || bid.status !== 'submitted'}
+        >
+          <Text style={styles.acceptButtonText}>
+            {bid.status === 'submitted' ? 'Accept This Bid' : bid.status.toUpperCase()}
+          </Text>
+        </TouchableOpacity>
       </View>
     );
   };
 
   return (
     <View style={styles.container}>
+      {/* RULE: No sorting controls, no "best" indicators */}
       <View style={styles.header}>
-        <Text style={styles.title}>Bids Received</Text>
+        <Text style={styles.title}>All Bids</Text>
         <Text style={styles.subtitle}>
-          {bids.length} {bids.length === 1 ? 'bid' : 'bids'}
+          {bids.length} {bids.length === 1 ? 'bid' : 'bids'} received
         </Text>
       </View>
 
-      <View style={styles.rideInfoCard}>
-        <Text style={styles.rideInfoText}>From: {ride.pickupAddress}</Text>
-        <Text style={styles.rideInfoText}>To: {ride.dropoffAddress}</Text>
-        <Text style={styles.rideInfoText}>Distance: {ride.distanceKm} km</Text>
-      </View>
-
-      {bids.length === 0 ? (
-        <View style={styles.emptyState}>
-          <Text style={styles.emptyText}>No bids yet</Text>
-          <Text style={styles.emptySubtext}>
-            Drivers will submit bids with their prices
-          </Text>
-        </View>
-      ) : (
-        <>
-          {ride.status === 'ACCEPTED' && (
-            <View style={styles.acceptedBanner}>
-              <Text style={styles.acceptedText}>
-                ✓ Bid Accepted - Ride is confirmed
-              </Text>
-            </View>
-          )}
-          <FlatList
-            data={bids}
-            renderItem={renderBidItem}
-            keyExtractor={item => item.id}
-            contentContainerStyle={styles.listContent}
-          />
-        </>
-      )}
+      {/* RULE: All bid cards look the same */}
+      <FlatList
+        data={bids}
+        renderItem={renderBid}
+        keyExtractor={(item) => item.id}
+        contentContainerStyle={styles.listContent}
+      />
     </View>
   );
 };
@@ -174,45 +224,32 @@ const ViewBidsScreen = ({route, navigation}: any) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#F8F9FA',
+  },
+  centerContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F8F9FA',
   },
   header: {
+    backgroundColor: '#FFFFFF',
     padding: 16,
-    backgroundColor: '#fff',
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    borderBottomColor: '#E0E0E0',
   },
   title: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#000',
+    color: '#1A1A1A',
+    marginBottom: 4,
   },
   subtitle: {
     fontSize: 14,
     color: '#666',
-    marginTop: 4,
-  },
-  rideInfoCard: {
-    backgroundColor: '#fff',
-    padding: 16,
-    marginTop: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
-  },
-  rideInfoText: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 4,
-  },
-  emptyState: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
   },
   emptyText: {
     fontSize: 18,
-    fontWeight: '600',
     color: '#666',
     marginBottom: 8,
   },
@@ -220,30 +257,20 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#999',
   },
-  acceptedBanner: {
-    backgroundColor: '#4CAF50',
-    padding: 12,
-    marginHorizontal: 16,
-    marginTop: 16,
-    borderRadius: 8,
-  },
-  acceptedText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#fff',
-    textAlign: 'center',
-  },
   listContent: {
     padding: 16,
   },
+  // RULE: All bid cards are identical - same size, color, layout
   bidCard: {
-    backgroundColor: '#fff',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
     padding: 16,
-    borderRadius: 8,
-    marginBottom: 12,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
     shadowColor: '#000',
-    shadowOffset: {width: 0, height: 1},
-    shadowOpacity: 0.1,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
     shadowRadius: 2,
     elevation: 2,
   },
@@ -251,67 +278,79 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 12,
   },
-  bidPrice: {
-    fontSize: 24,
+  // RULE: Price displayed plainly, no color emphasis
+  bidAmount: {
+    fontSize: 28,
     fontWeight: 'bold',
-    color: '#000',
+    color: '#1A1A1A',
   },
-  bidTime: {
+  bidDate: {
     fontSize: 12,
     color: '#999',
   },
   bidMessage: {
     fontSize: 14,
     color: '#666',
-    marginBottom: 12,
+    marginBottom: 16,
     lineHeight: 20,
   },
+  verificationSection: {
+    backgroundColor: '#F8F9FA',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+  },
+  verificationTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1A1A1A',
+    marginBottom: 8,
+  },
+  verificationRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  verificationLabel: {
+    fontSize: 13,
+    color: '#666',
+  },
+  verificationValue: {
+    fontSize: 13,
+    color: '#1A1A1A',
+    fontWeight: '500',
+  },
+  verificationFlags: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginTop: 8,
+    gap: 8,
+  },
+  // RULE: Verification badges are neutral indicators, no quality judgments
+  verificationBadge: {
+    backgroundColor: '#E3F2FD',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  badgeText: {
+    fontSize: 12,
+    color: '#1976D2',
+    fontWeight: '500',
+  },
+  // RULE: Accept button looks the same for all bids
   acceptButton: {
     backgroundColor: '#007AFF',
-    padding: 12,
+    padding: 14,
     borderRadius: 8,
     alignItems: 'center',
   },
   acceptButtonText: {
-    color: '#fff',
+    color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
-  },
-  bidActions: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#E0E0E0',
-  },
-  bidActionButton: {
-    flex: 1,
-    padding: 8,
-    borderRadius: 6,
-    alignItems: 'center',
-    borderWidth: 1,
-  },
-  reportButton: {
-    borderColor: '#FF9800',
-    backgroundColor: '#FFF3E0',
-  },
-  blockButton: {
-    borderColor: '#F44336',
-    backgroundColor: '#FFEBEE',
-  },
-  bidActionText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#000',
-  },
-  errorText: {
-    fontSize: 16,
-    color: '#999',
-    textAlign: 'center',
-    marginTop: 40,
   },
 });
 

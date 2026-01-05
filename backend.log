@@ -2,3 +2,25 @@
 🚀 DryverHub API server running on http://localhost:3000
 📊 Health check: http://localhost:3000/health
 ✅ Connected to PostgreSQL database
+[INFO] 20:27:46 Restarting: /Users/michaelburbage/Documents/Development/dryvrhub/backend/src/routes/bids.ts has been modified
+🚀 DryverHub API server running on http://localhost:3000
+📊 Health check: http://localhost:3000/health
+✅ Connected to PostgreSQL database
+✅ Connected to PostgreSQL database
+✅ Connected to PostgreSQL database
+✅ Connected to PostgreSQL database
+[INFO] 20:33:01 Restarting: /Users/michaelburbage/Documents/Development/dryvrhub/backend/src/routes/trips.ts has been modified
+🚀 DryverHub API server running on http://localhost:3000
+📊 Health check: http://localhost:3000/health
+✅ Connected to PostgreSQL database
+✅ Connected to PostgreSQL database
+✅ Connected to PostgreSQL database
+✅ Connected to PostgreSQL database
+✅ Connected to PostgreSQL database
+✅ Connected to PostgreSQL database
+✅ Connected to PostgreSQL database
+✅ Connected to PostgreSQL database
+✅ Connected to PostgreSQL database
+[INFO] 20:40:53 Restarting: /Users/michaelburbage/Documents/Development/dryvrhub/backend/src/routes/trips.ts has been modified
+🚀 DryverHub API server running on http://localhost:3000
+📊 Health check: http://localhost:3000/health

@@ -155,4 +155,172 @@ router.delete('/:id', async (req: Request, res: Response) => {
   }
 });
 
+// GET /api/trips/:id/bids - Get all bids for a trip (rider only)
+// RULE: Order by created_at ASC (oldest first) - neutral, predictable ordering
+// RULE: Return ALL bids - no filtering, no ranking, no recommendations
+router.get('/:id/bids', authenticate, requireRole('rider'), async (req: Request, res: Response) => {
+  try {
+    const { id: tripId } = req.params;
+    const riderId = req.user!.id;
+
+    // Verify rider owns this trip
+    const tripResult = await pool.query(
+      'SELECT rider_id FROM trips WHERE id = $1',
+      [tripId]
+    );
+
+    if (tripResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Trip not found' });
+    }
+
+    if (tripResult.rows[0].rider_id !== riderId) {
+      return res.status(403).json({ error: 'Not authorized to view bids for this trip' });
+    }
+
+    // Get all bids with minimal driver context (neutral only)
+    // RULE: Order by created_at ASC (oldest first, neutral)
+    const bidsResult = await pool.query(
+      `SELECT 
+        b.id,
+        b.driver_id,
+        b.bid_amount,
+        b.message,
+        b.status,
+        b.created_at,
+        d.email as driver_email,
+        d.created_at as driver_account_created_at,
+        d.identity_verified,
+        d.background_check_status,
+        (SELECT COUNT(*) FROM trips t2 
+         JOIN bids b2 ON t2.id = b2.trip_id 
+         WHERE b2.driver_id = d.id AND b2.status = 'accepted' AND t2.status = 'accepted') as completed_trip_count,
+        (SELECT COUNT(*) FROM vehicles v WHERE v.driver_id = d.id AND v.vehicle_verified = true) > 0 as vehicle_verified
+       FROM bids b
+       JOIN drivers d ON b.driver_id = d.id
+       WHERE b.trip_id = $1
+       ORDER BY b.created_at ASC`,
+      [tripId]
+    );
+
+    // Return ALL bids with neutral data only
+    const bids = bidsResult.rows.map(row => ({
+      id: row.id,
+      driver_id: row.driver_id,
+      bid_amount: row.bid_amount,
+      message: row.message,
+      status: row.status,
+      created_at: row.created_at,
+      // Neutral driver context (no scores, no rankings)
+      driver_context: {
+        account_age_days: Math.floor((Date.now() - new Date(row.driver_account_created_at).getTime()) / (1000 * 60 * 60 * 24)),
+        completed_trip_count: parseInt(row.completed_trip_count),
+        identity_verified: row.identity_verified,
+        background_check_completed: row.background_check_status === 'passed',
+        vehicle_verified: row.vehicle_verified,
+      }
+    }));
+
+    res.json(bids);
+  } catch (error) {
+    console.error('Error fetching bids:', error);
+    res.status(500).json({ error: 'Failed to fetch bids' });
+  }
+});
+
+// POST /api/trips/:id/accept-bid - Accept a bid for a trip (rider only)
+// RULE: Explicit acceptance, no auto-accept, no recommendations
+router.post('/:id/accept-bid', authenticate, requireRole('rider'), async (req: Request, res: Response) => {
+  try {
+    const { id: tripId } = req.params;
+    const { bid_id } = req.body;
+    const riderId = req.user!.id;
+
+    if (!bid_id) {
+      return res.status(400).json({ error: 'bid_id is required' });
+    }
+
+    // Start transaction
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // Verify rider owns this trip
+      const tripResult = await client.query(
+        'SELECT rider_id, status FROM trips WHERE id = $1 FOR UPDATE',
+        [tripId]
+      );
+
+      if (tripResult.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({ error: 'Trip not found' });
+      }
+
+      if (tripResult.rows[0].rider_id !== riderId) {
+        await client.query('ROLLBACK');
+        return res.status(403).json({ error: 'Not authorized to accept bids for this trip' });
+      }
+
+      if (tripResult.rows[0].status !== 'open') {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: 'Trip is not open for bidding' });
+      }
+
+      // Verify bid belongs to this trip
+      const bidResult = await client.query(
+        'SELECT trip_id, status FROM bids WHERE id = $1 FOR UPDATE',
+        [bid_id]
+      );
+
+      if (bidResult.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({ error: 'Bid not found' });
+      }
+
+      if (bidResult.rows[0].trip_id !== tripId) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: 'Bid does not belong to this trip' });
+      }
+
+      if (bidResult.rows[0].status !== 'submitted') {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: 'Bid is no longer available' });
+      }
+
+      // Accept the selected bid
+      await client.query(
+        "UPDATE bids SET status = 'accepted' WHERE id = $1",
+        [bid_id]
+      );
+
+      // Reject all other bids for this trip
+      await client.query(
+        "UPDATE bids SET status = 'rejected' WHERE trip_id = $1 AND id != $2 AND status = 'submitted'",
+        [tripId, bid_id]
+      );
+
+      // Update trip status to accepted
+      await client.query(
+        "UPDATE trips SET status = 'accepted' WHERE id = $1",
+        [tripId]
+      );
+
+      await client.query('COMMIT');
+
+      res.json({ 
+        message: 'Bid accepted successfully',
+        trip_id: tripId,
+        bid_id: bid_id
+      });
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    console.error('Error accepting bid:', error);
+    res.status(500).json({ error: 'Failed to accept bid' });
+  }
+});
+
 export default router;
