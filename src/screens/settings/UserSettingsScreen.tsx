@@ -14,10 +14,12 @@ import {launchImageLibrary, launchCamera} from 'react-native-image-picker';
 import {useSettings} from '../../contexts/SettingsContext';
 import {useRole} from '../../contexts/RoleContext';
 import {useData} from '../../contexts/DataContext';
+import {useAuth} from '../../contexts/AuthContext';
 
 const UserSettingsScreen = () => {
   const {userSettings, updateUserSettings} = useSettings();
   const {role} = useRole();
+  const {user, logout} = useAuth();
   const {
     getCurrentUser,
     getRiderProfile,
@@ -234,6 +236,23 @@ const UserSettingsScreen = () => {
               'Coming Soon',
               'Document upload will be available in the next update.'
             );
+          },
+        },
+      ]
+    );
+  };
+
+  const handleLogout = () => {
+    Alert.alert(
+      'Log Out',
+      'Are you sure you want to log out?',
+      [
+        {text: 'Cancel', style: 'cancel'},
+        {
+          text: 'Log Out',
+          style: 'destructive',
+          onPress: async () => {
+            await logout();
           },
         },
       ]
@@ -698,6 +717,33 @@ const UserSettingsScreen = () => {
           ))
         )}
       </View>
+
+      {/* Account Actions */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Account</Text>
+        
+        {user && (
+          <View style={styles.row}>
+            <Text style={styles.label}>Email</Text>
+            <Text style={styles.value}>{user.email}</Text>
+          </View>
+        )}
+
+        {user && (
+          <View style={styles.row}>
+            <Text style={styles.label}>Email Verified</Text>
+            <Text style={[styles.value, user.emailVerified ? styles.verifiedText : styles.unverifiedText]}>
+              {user.emailVerified ? 'Verified' : 'Not Verified'}
+            </Text>
+          </View>
+        )}
+
+        <TouchableOpacity
+          style={styles.logoutButton}
+          onPress={handleLogout}>
+          <Text style={styles.logoutButtonText}>Log Out</Text>
+        </TouchableOpacity>
+      </View>
     </ScrollView>
   );
 };
@@ -951,6 +997,26 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     marginTop: 8,
     lineHeight: 16,
+  },
+  verifiedText: {
+    color: '#2e7d32',
+    fontWeight: '600',
+  },
+  unverifiedText: {
+    color: '#e65100',
+    fontWeight: '600',
+  },
+  logoutButton: {
+    backgroundColor: '#ff3b30',
+    paddingVertical: 14,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 16,
+  },
+  logoutButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
 

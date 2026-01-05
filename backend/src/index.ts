@@ -1,6 +1,7 @@
 import express, { Request, Response } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import authRouter from './routes/auth';
 import tripsRouter from './routes/trips';
 import bidsRouter from './routes/bids';
 import ridersRouter from './routes/riders';
@@ -30,6 +31,7 @@ app.get('/health', async (req: Request, res: Response) => {
 });
 
 // API Routes
+app.use('/api/auth', authRouter);
 app.use('/api/trips', tripsRouter);
 app.use('/api/bids', bidsRouter);
 app.use('/api/riders', ridersRouter);

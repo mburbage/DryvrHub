@@ -2,19 +2,36 @@
 // Use 10.0.2.2 for Android emulator (maps to host machine's localhost)
 // Use localhost for iOS simulator
 import { Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const API_BASE_URL = Platform.OS === 'android' 
   ? 'http://10.0.2.2:3000/api'
   : 'http://localhost:3000/api';
 
-// Generic fetch wrapper with error handling
+const AUTH_TOKEN_KEY = '@dryvrhub:auth_token';
+
+// Get auth token from storage
+async function getAuthToken(): Promise<string | null> {
+  try {
+    return await AsyncStorage.getItem(AUTH_TOKEN_KEY);
+  } catch (error) {
+    console.error('Failed to get auth token:', error);
+    return null;
+  }
+}
+
+// Generic fetch wrapper with error handling and auth
 async function apiFetch<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const url = `${API_BASE_URL}${endpoint}`;
+  
+  // Get auth token
+  const token = await getAuthToken();
   
   const config: RequestInit = {
     ...options,
     headers: {
       'Content-Type': 'application/json',
+      ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
       ...options.headers,
     },
   };

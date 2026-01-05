@@ -1,5 +1,6 @@
 import express, { Request, Response } from 'express';
 import pool from '../config/database';
+import { authenticate, requireRole, requireEmailVerified } from '../middleware/auth';
 
 const router = express.Router();
 
@@ -59,9 +60,14 @@ router.get('/:id', async (req: Request, res: Response) => {
 });
 
 // POST /api/bids - Create new bid
-router.post('/', async (req: Request, res: Response) => {
+// RULE: Only authenticated, email-verified drivers can bid
+// RULE: Verification gates FEATURES, not login
+router.post('/', authenticate, requireRole('driver'), requireEmailVerified, async (req: Request, res: Response) => {
   try {
-    const { trip_id, driver_id, bid_amount, message } = req.body;
+    const { trip_id, bid_amount, message } = req.body;
+    
+    // Use authenticated driver's ID
+    const driver_id = req.user!.id;
 
     const result = await pool.query(
       `INSERT INTO bids (trip_id, driver_id, bid_amount, message)

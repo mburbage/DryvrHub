@@ -1,5 +1,6 @@
 import express, { Request, Response } from 'express';
 import pool from '../config/database';
+import { authenticate, requireRole, requireEmailVerified } from '../middleware/auth';
 
 const router = express.Router();
 
@@ -65,10 +66,10 @@ router.get('/:id', async (req: Request, res: Response) => {
 });
 
 // POST /api/trips - Create new trip
-router.post('/', async (req: Request, res: Response) => {
+// RULE: Only authenticated riders can post trips
+router.post('/', authenticate, requireRole('rider'), async (req: Request, res: Response) => {
   try {
     const {
-      rider_id,
       pickup_address,
       dropoff_address,
       pickup_lat,
@@ -80,6 +81,9 @@ router.post('/', async (req: Request, res: Response) => {
       scheduled_pickup_time,
       notes,
     } = req.body;
+
+    // Use authenticated rider's ID
+    const rider_id = req.user!.id;
 
     // Default expiry: 24 hours from now
     const expiresAt = new Date();

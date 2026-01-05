@@ -1,5 +1,4 @@
-npm error Missing script: "dev"
-npm error
-npm error To see a list of scripts, run:
-npm error   npm run
-npm error A complete log of this run can be found in: /Users/michaelburbage/.npm/_logs/2026-01-04T16_41_26_530Z-debug-0.log
+[INFO] 20:24:01 ts-node-dev ver. 2.0.0 (using ts-node ver. 10.9.2, typescript ver. 5.9.3)
+🚀 DryverHub API server running on http://localhost:3000
+📊 Health check: http://localhost:3000/health
+✅ Connected to PostgreSQL database
