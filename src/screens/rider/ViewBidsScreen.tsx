@@ -102,8 +102,19 @@ const ViewBidsScreen = ({route, navigation}: any) => {
                 throw new Error(error.error || 'Failed to accept bid');
               }
 
+              const result = await response.json();
+              const {pickup_code} = result;
+
               Alert.alert('Success', 'Bid accepted successfully!', [
-                {text: 'OK', onPress: () => navigation.goBack()},
+                {
+                  text: 'OK', 
+                  onPress: () => {
+                    navigation.navigate('TripTracking', {
+                      tripId: rideId,
+                      pickupCode: pickup_code,
+                    });
+                  }
+                },
               ]);
             } catch (error: any) {
               Alert.alert('Error', error.message || 'Failed to accept bid');

@@ -2,6 +2,8 @@ import React from 'react';
 import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
 import {createStackNavigator} from '@react-navigation/stack';
 import DriverRideBoardScreen from '../screens/driver/DriverRideBoardScreen';
+import DriverTripsScreen from '../screens/driver/DriverTripsScreen';
+import TripExecutionScreen from '../screens/driver/TripExecutionScreen';
 import RideDetailsScreen from '../screens/driver/RideDetailsScreen';
 import BidFormScreen from '../screens/driver/BidFormScreen';
 import DriverProfileScreen from '../screens/driver/DriverProfileScreen';
@@ -32,6 +34,23 @@ function RideBoardStack() {
   );
 }
 
+function MyTripsStack() {
+  return (
+    <Stack.Navigator>
+      <Stack.Screen
+        name="MyTripsList"
+        component={DriverTripsScreen}
+        options={{title: 'My Trips'}}
+      />
+      <Stack.Screen
+        name="TripExecution"
+        component={TripExecutionScreen}
+        options={{title: 'Trip Execution'}}
+      />
+    </Stack.Navigator>
+  );
+}
+
 const DriverNavigator = () => {
   return (
     <Tab.Navigator>
@@ -39,6 +58,11 @@ const DriverNavigator = () => {
         name="RideBoard"
         component={RideBoardStack}
         options={{title: 'Available Rides', headerShown: false}}
+      />
+      <Tab.Screen
+        name="MyTrips"
+        component={MyTripsStack}
+        options={{title: 'My Trips', headerShown: false}}
       />
       <Tab.Screen
         name="Profile"

@@ -41,7 +41,14 @@ const RiderRideBoardScreen = ({navigation}: any) => {
       }
 
       const data = await response.json();
-      setTrips(data);
+      // Convert string decimal fields to numbers
+      const processedTrips = data.map((trip: any) => ({
+        ...trip,
+        estimated_distance_miles: trip.estimated_distance_miles 
+          ? parseFloat(trip.estimated_distance_miles) 
+          : null,
+      }));
+      setTrips(processedTrips);
     } catch (error) {
       console.error('Error fetching trips:', error);
     } finally {

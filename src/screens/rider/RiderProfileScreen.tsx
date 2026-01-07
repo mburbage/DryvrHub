@@ -1,21 +1,13 @@
 import React from 'react';
 import {View, Text, StyleSheet, ScrollView} from 'react-native';
-import {useData} from '../../contexts/DataContext';
+import {useAuth} from '../../contexts/AuthContext';
 
 const RiderProfileScreen = () => {
-  const {getCurrentUser, getRiderProfile} = useData();
-  const user = getCurrentUser();
-  const profile = getRiderProfile(user.id);
+  const {user} = useAuth();
 
-  const getAccountAge = () => {
-    const daysSince = Math.floor(
-      (new Date().getTime() - new Date(user.createdAt).getTime()) /
-        (1000 * 60 * 60 * 24),
-    );
-    if (daysSince < 30) return `${daysSince} days`;
-    if (daysSince < 365) return `${Math.floor(daysSince / 30)} months`;
-    return `${Math.floor(daysSince / 365)} years`;
-  };
+  if (!user) {
+    return null;
+  }
 
   return (
     <ScrollView style={styles.container}>
@@ -31,35 +23,17 @@ const RiderProfileScreen = () => {
           </View>
 
           <View style={styles.infoRow}>
-            <Text style={styles.label}>Phone</Text>
-            <Text style={styles.value}>{user.phoneNumber}</Text>
+            <Text style={styles.label}>Role</Text>
+            <Text style={styles.value}>Rider</Text>
           </View>
 
           <View style={styles.infoRow}>
-            <Text style={styles.label}>Account Age</Text>
-            <Text style={styles.value}>{getAccountAge()}</Text>
-          </View>
-
-          <View style={styles.infoRow}>
-            <Text style={styles.label}>Verified</Text>
+            <Text style={styles.label}>Email Verified</Text>
             <Text style={[styles.value, styles.verified]}>
-              {user.isVerified ? '✓ Verified' : 'Not Verified'}
+              {user.emailVerified ? '✓ Verified' : 'Not Verified'}
             </Text>
           </View>
         </View>
-
-        {profile && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Ride History</Text>
-            <View style={styles.infoRow}>
-              <Text style={styles.label}>Completed Rides</Text>
-              <Text style={styles.value}>{profile.completedRidesCount}</Text>
-            </View>
-            <Text style={styles.hint}>
-              This count is private and only visible to you.
-            </Text>
-          </View>
-        )}
       </View>
     </ScrollView>
   );

@@ -20,10 +20,9 @@ import DriverNavigator from './src/navigation/DriverNavigator';
 
 function AppContent() {
   const {user, isLoading: authLoading} = useAuth();
-  const {role, isLoading: roleLoading} = useRole();
 
   // Show loading while checking auth state
-  if (authLoading || roleLoading) {
+  if (authLoading) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#007AFF" />
@@ -36,15 +35,10 @@ function AppContent() {
     return <AuthNavigator />;
   }
 
-  // Authenticated but no role selected (legacy support)
-  if (!role) {
-    return <RoleSelectionScreen />;
-  }
-
-  // Authenticated with role - show main app
+  // Authenticated with role from backend - show main app
   return (
     <NavigationContainer>
-      {role === 'RIDER' ? <RiderNavigator /> : <DriverNavigator />}
+      {user.role === 'rider' ? <RiderNavigator /> : <DriverNavigator />}
     </NavigationContainer>
   );
 }

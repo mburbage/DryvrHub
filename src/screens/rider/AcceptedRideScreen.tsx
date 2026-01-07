@@ -62,7 +62,16 @@ const AcceptedRideScreen = ({route, navigation}: any) => {
       }
 
       const tripData = await tripResponse.json();
-      setTrip(tripData);
+      // Convert string decimal fields to numbers
+      setTrip({
+        ...tripData,
+        estimated_distance_miles: tripData.estimated_distance_miles 
+          ? parseFloat(tripData.estimated_distance_miles) 
+          : null,
+        final_amount: tripData.final_amount 
+          ? parseFloat(tripData.final_amount) 
+          : null,
+      });
 
       // Fetch bids to find the accepted one
       const bidsResponse = await fetch(`${API_URL}/api/trips/${tripId}/bids`, {
@@ -209,10 +218,17 @@ const AcceptedRideScreen = ({route, navigation}: any) => {
           </TouchableOpacity>
         )}
 
+        {trip.status === 'accepted' && (
+          <TouchableOpacity
+            style={styles.trackButton}
+            onPress={() => navigation.navigate('TripTracking', {tripId: trip.id})}>
+            <Text style={styles.trackButtonText}>Track Trip →</Text>
+          </TouchableOpacity>
+        )}
+
         <View style={styles.infoCard}>
           <Text style={styles.infoText}>
-            This view is for your reference only. No tracking or navigation is
-            provided. Coordinate with your driver directly.
+            Use "Track Trip" to monitor driver status and complete payment/verification steps.
           </Text>
         </View>
       </View>
@@ -322,6 +338,18 @@ const styles = StyleSheet.create({
   },
   cancelButtonText: {
     color: '#FF3B30',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  trackButton: {
+    backgroundColor: '#007AFF',
+    padding: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  trackButtonText: {
+    color: '#fff',
     fontSize: 16,
     fontWeight: '600',
   },

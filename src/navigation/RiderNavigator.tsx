@@ -5,6 +5,7 @@ import RiderRideBoardScreen from '../screens/rider/RiderRideBoardScreen';
 import PostRideScreen from '../screens/rider/PostRideScreen';
 import ViewBidsScreen from '../screens/rider/ViewBidsScreen';
 import AcceptedRideScreen from '../screens/rider/AcceptedRideScreen';
+import RiderTripTrackingScreen from '../screens/rider/RiderTripTrackingScreen';
 import RiderProfileScreen from '../screens/rider/RiderProfileScreen';
 import SettingsNavigator from '../screens/settings/SettingsNavigator';
 
@@ -33,6 +34,11 @@ function RideBoardStack() {
         name="AcceptedRide"
         component={AcceptedRideScreen}
         options={{title: 'Ride Details'}}
+      />
+      <Stack.Screen
+        name="TripTracking"
+        component={RiderTripTrackingScreen}
+        options={{title: 'Trip Tracking'}}
       />
     </Stack.Navigator>
   );

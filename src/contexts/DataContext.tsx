@@ -2,6 +2,7 @@ import React, {createContext, useContext, useState, useEffect, ReactNode} from '
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {Ride, Bid, User, RiderProfile, DriverProfile} from '../models';
 import {tripsApi, bidsApi, ridersApi, driversApi, messagesApi, reportsApi} from '../services/api';
+import {useAuth} from './AuthContext';
 
 const BLOCKED_USERS_STORAGE_KEY = '@dryverhub_blocked_users';
 const CURRENT_USER_ID_KEY = '@dryverhub_current_user_id';
@@ -158,6 +159,7 @@ function convertBidToApiBid(bid: Omit<Bid, 'id' | 'createdAt'>) {
 }
 
 export const DataProvider = ({children}: {children: ReactNode}) => {
+  const authContext = useAuth();
   const [rides, setRides] = useState<Ride[]>([]);
   const [bids, setBids] = useState<Bid[]>([]);
   const [blockedUsers, setBlockedUsers] = useState<Set<string>>(new Set());
@@ -323,6 +325,16 @@ export const DataProvider = ({children}: {children: ReactNode}) => {
   };
 
   const getCurrentUser = (): User => {
+    // Return user from AuthContext if available, otherwise return mock user
+    if (authContext.user) {
+      return {
+        id: authContext.user.id,
+        email: authContext.user.email,
+        phoneNumber: '',
+        createdAt: new Date(),
+        isVerified: authContext.user.emailVerified,
+      };
+    }
     return MOCK_USER;
   };
 

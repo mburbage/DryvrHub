@@ -2,6 +2,7 @@ import express, { Request, Response } from 'express';
 import pool from '../config/database';
 import { authenticate, requireRole, requireEmailVerified } from '../middleware/auth';
 import { generatePickupCode, hashPickupCode, verifyPickupCode } from '../utils/pickupCode';
+import { io } from '../index';
 
 const router = express.Router();
 
@@ -473,12 +474,15 @@ router.post('/:id/start-en-route', authenticate, requireRole('driver'), async (r
       }
 
       // Update trip status to en_route
-      await client.query(
-        "UPDATE trips SET status = 'en_route', en_route_at = NOW() WHERE id = $1",
+      const enRouteResult = await client.query(
+        "UPDATE trips SET status = 'en_route', en_route_at = NOW() WHERE id = $1 RETURNING *",
         [tripId]
       );
 
       await client.query('COMMIT');
+
+      // Emit WebSocket event
+      io.to(`trip:${tripId}`).emit('trip-updated', enRouteResult.rows[0]);
 
       res.json({ 
         message: 'Trip status updated to en route',
@@ -525,12 +529,15 @@ router.post('/:id/arrived', authenticate, requireRole('driver'), async (req: Req
       }
 
       // Update trip status to arrived
-      await client.query(
-        "UPDATE trips SET status = 'arrived', arrived_at = NOW() WHERE id = $1",
+      const arrivedResult = await client.query(
+        "UPDATE trips SET status = 'arrived', arrived_at = NOW() WHERE id = $1 RETURNING *",
         [tripId]
       );
 
       await client.query('COMMIT');
+
+      // Emit WebSocket event
+      io.to(`trip:${tripId}`).emit('trip-updated', arrivedResult.rows[0]);
 
       res.json({ 
         message: 'Trip status updated to arrived',
@@ -653,12 +660,15 @@ router.post('/:id/start-trip', authenticate, requireRole('driver'), async (req: 
       }
 
       // Update trip status to code_verified (driver verified, awaiting rider payment confirmation)
-      await client.query(
-        "UPDATE trips SET status = 'code_verified', pickup_at = NOW() WHERE id = $1",
+      const codeVerifiedResult = await client.query(
+        "UPDATE trips SET status = 'code_verified', pickup_at = NOW() WHERE id = $1 RETURNING *",
         [tripId]
       );
 
       await client.query('COMMIT');
+
+      // Emit WebSocket event
+      io.to(`trip:${tripId}`).emit('trip-updated', codeVerifiedResult.rows[0]);
 
       res.json({ 
         message: 'Pickup code verified - awaiting rider payment confirmation',
@@ -706,12 +716,15 @@ router.post('/:id/complete', authenticate, requireRole('driver'), async (req: Re
       }
 
       // Update trip status to completed (driver finished, awaiting rider confirmation)
-      await client.query(
-        "UPDATE trips SET status = 'completed', completed_at = NOW() WHERE id = $1",
+      const completedResult = await client.query(
+        "UPDATE trips SET status = 'completed', completed_at = NOW() WHERE id = $1 RETURNING *",
         [tripId]
       );
 
       await client.query('COMMIT');
+
+      // Emit WebSocket event
+      io.to(`trip:${tripId}`).emit('trip-updated', completedResult.rows[0]);
 
       res.json({ 
         message: 'Trip marked as completed - awaiting rider verification',
@@ -771,12 +784,15 @@ router.post('/:id/confirm-completion', authenticate, requireRole('rider'), async
       }
 
       // Update trip to rider_confirmed status (rider verified, final status)
-      await client.query(
-        "UPDATE trips SET status = 'rider_confirmed', rider_confirmed_at = NOW() WHERE id = $1",
+      const confirmedResult = await client.query(
+        "UPDATE trips SET status = 'rider_confirmed', rider_confirmed_at = NOW() WHERE id = $1 RETURNING *",
         [tripId]
       );
 
       await client.query('COMMIT');
+
+      // Emit WebSocket event
+      io.to(`trip:${tripId}`).emit('trip-updated', confirmedResult.rows[0]);
 
       res.json({ 
         message: 'Trip completion confirmed - trip finalized',
@@ -834,12 +850,15 @@ router.post('/:id/confirm-payment', authenticate, requireRole('rider'), async (r
       }
 
       // Update trip to in_progress (payment confirmed, trip starting)
-      await client.query(
-        "UPDATE trips SET status = 'in_progress', paid_at = NOW() WHERE id = $1",
+      const inProgressResult = await client.query(
+        "UPDATE trips SET status = 'in_progress', paid_at = NOW() WHERE id = $1 RETURNING *",
         [tripId]
       );
 
       await client.query('COMMIT');
+
+      // Emit WebSocket event
+      io.to(`trip:${tripId}`).emit('trip-updated', inProgressResult.rows[0]);
 
       res.json({ 
         message: 'Payment confirmed - trip in progress',
