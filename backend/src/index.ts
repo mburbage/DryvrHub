@@ -64,14 +64,17 @@ io.use((socket, next) => {
   const token = socket.handshake.auth.token;
   
   if (!token) {
+    console.log('❌ WebSocket auth failed: No token provided');
     return next(new Error('Authentication required'));
   }
 
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key') as any;
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'dryvrhub-dev-secret-change-in-production') as any;
     socket.data.user = decoded;
+    console.log(`✓ WebSocket auth success: user ${decoded.id}`);
     next();
   } catch (error) {
+    console.log('❌ WebSocket auth failed: Invalid token', error);
     next(new Error('Invalid token'));
   }
 });

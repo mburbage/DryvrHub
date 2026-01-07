@@ -76,7 +76,9 @@ const DriverTripsScreen = ({navigation}: any) => {
       });
 
       const results = await Promise.all(tripsPromises);
-      const validTrips = results.filter((t): t is AcceptedTrip => t !== null);
+      const validTrips = results
+        .filter((t): t is AcceptedTrip => t !== null)
+        .filter(t => t.trip.status !== 'rider_confirmed'); // Hide completed trips
       
       setTrips(validTrips);
     } catch (error) {

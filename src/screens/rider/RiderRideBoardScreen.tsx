@@ -41,13 +41,15 @@ const RiderRideBoardScreen = ({navigation}: any) => {
       }
 
       const data = await response.json();
-      // Convert string decimal fields to numbers
-      const processedTrips = data.map((trip: any) => ({
-        ...trip,
-        estimated_distance_miles: trip.estimated_distance_miles 
-          ? parseFloat(trip.estimated_distance_miles) 
-          : null,
-      }));
+      // Convert string decimal fields to numbers and filter out completed trips
+      const processedTrips = data
+        .filter((trip: any) => trip.status !== 'rider_confirmed')
+        .map((trip: any) => ({
+          ...trip,
+          estimated_distance_miles: trip.estimated_distance_miles 
+            ? parseFloat(trip.estimated_distance_miles) 
+            : null,
+        }));
       setTrips(processedTrips);
     } catch (error) {
       console.error('Error fetching trips:', error);
@@ -105,13 +107,13 @@ const RiderRideBoardScreen = ({navigation}: any) => {
   };
 
   const renderRideItem = ({item}: {item: Trip}) => {
-    const isAcceptedOrCompleted = item.status === 'accepted';
+    const isAcceptedOrActive = ['accepted', 'en_route', 'arrived', 'code_verified', 'in_progress', 'completed', 'rider_confirmed'].includes(item.status);
 
     return (
       <TouchableOpacity
         style={styles.rideCard}
         onPress={() => 
-          isAcceptedOrCompleted 
+          isAcceptedOrActive 
             ? handleViewAcceptedRide(item.id)
             : handleViewBids(item.id)
         }>

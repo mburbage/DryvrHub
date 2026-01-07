@@ -1,5 +1,5 @@
 import React, {useState, useEffect} from 'react';
-import {View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, ActivityIndicator, Platform} from 'react-native';
+import {View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, ActivityIndicator, Platform, TextInput} from 'react-native';
 import {useAuth} from '../../contexts/AuthContext';
 import io, {Socket} from 'socket.io-client';
 
@@ -11,11 +11,13 @@ const TripExecutionScreen = ({route, navigation}: any) => {
   const [trip, setTrip] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [socket, setSocket] = useState<Socket | null>(null);
+  const [pickupCode, setPickupCode] = useState('');
 
   useEffect(() => {
     fetchTripDetails();
 
     // Initialize WebSocket connection
+    console.log('Initializing WebSocket with token:', token ? 'Token exists' : 'No token');
     const socketInstance = io(API_URL, {
       auth: {
         token: token,
@@ -153,8 +155,44 @@ const TripExecutionScreen = ({route, navigation}: any) => {
           {trip.status === 'arrived' && (
             <View>
               <Text style={styles.instructionText}>
-                Wait for rider to verify your pickup code
+                Ask rider for pickup code
               </Text>
+              <TextInput
+                style={styles.codeInput}
+                placeholder="Enter 4-digit code"
+                value={pickupCode}
+                onChangeText={setPickupCode}
+                keyboardType="number-pad"
+                maxLength={4}
+                autoCapitalize="characters"
+              />
+              <TouchableOpacity
+                style={[styles.actionButton, !pickupCode || pickupCode.length !== 4 ? styles.disabledButton : null]}
+                disabled={!pickupCode || pickupCode.length !== 4}
+                onPress={async () => {
+                  try {
+                    const response = await fetch(`${API_URL}/api/trips/${tripId}/start-trip`, {
+                      method: 'POST',
+                      headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json',
+                      },
+                      body: JSON.stringify({ pickup_code: pickupCode }),
+                    });
+
+                    if (response.ok) {
+                      Alert.alert('Success', 'Pickup verified! Waiting for rider payment confirmation.');
+                      setPickupCode('');
+                    } else {
+                      const error = await response.json();
+                      Alert.alert('Error', error.error || 'Invalid pickup code');
+                    }
+                  } catch (error: any) {
+                    Alert.alert('Error', error.message || 'Failed to verify pickup code');
+                  }
+                }}>
+                <Text style={styles.actionButtonText}>Verify Pickup Code</Text>
+              </TouchableOpacity>
             </View>
           )}
 
@@ -285,12 +323,28 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 8,
     alignItems: 'center',
-    marginTop: 8,
+    marginTop: 12,
   },
   actionButtonText: {
     color: '#fff',
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '600',
+  },
+  disabledButton: {
+    backgroundColor: '#ccc',
+    opacity: 0.6,
+  },
+  codeInput: {
+    backgroundColor: '#f5f5f5',
+    padding: 16,
+    borderRadius: 8,
+    fontSize: 24,
+    textAlign: 'center',
+    marginVertical: 16,
+    borderWidth: 2,
+    borderColor: '#007AFF',
+    letterSpacing: 4,
+    fontWeight: 'bold',
   },
   instructionText: {
     fontSize: 16,

@@ -23,6 +23,7 @@ interface Trip {
   notes: string | null;
   status: string;
   created_at: string;
+  pickup_code: string | null;
 }
 
 interface Bid {
@@ -218,10 +219,10 @@ const AcceptedRideScreen = ({route, navigation}: any) => {
           </TouchableOpacity>
         )}
 
-        {trip.status === 'accepted' && (
+        {['accepted', 'en_route', 'arrived', 'code_verified', 'in_progress', 'completed'].includes(trip.status) && (
           <TouchableOpacity
             style={styles.trackButton}
-            onPress={() => navigation.navigate('TripTracking', {tripId: trip.id})}>
+            onPress={() => navigation.navigate('TripTracking', {tripId: trip.id, pickupCode: trip.pickup_code})}>
             <Text style={styles.trackButtonText}>Track Trip →</Text>
           </TouchableOpacity>
         )}

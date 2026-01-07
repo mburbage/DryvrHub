@@ -313,9 +313,10 @@ router.post('/:id/accept-bid', authenticate, requireRole('rider'), async (req: R
       const codeHash = hashPickupCode(pickupCode);
 
       // Update trip to accepted status (driver accepted, ready for pickup)
+      // Store both plain code (for rider display) and hash (for driver verification)
       await client.query(
-        "UPDATE trips SET status = 'accepted', pickup_code_hash = $2, final_amount = $3 WHERE id = $1",
-        [tripId, codeHash, finalAmount]
+        "UPDATE trips SET status = 'accepted', pickup_code = $2, pickup_code_hash = $3, final_amount = $4 WHERE id = $1",
+        [tripId, pickupCode, codeHash, finalAmount]
       );
 
       await client.query('COMMIT');
@@ -653,6 +654,12 @@ router.post('/:id/start-trip', authenticate, requireRole('driver'), async (req: 
 
       // Verify the pickup code
       const isValid = verifyPickupCode(pickup_code, pickup_code_hash);
+      
+      console.log('🔐 Pickup code verification:');
+      console.log('  - Received code:', pickup_code);
+      console.log('  - Code length:', pickup_code.length);
+      console.log('  - Stored hash:', pickup_code_hash);
+      console.log('  - Is valid:', isValid);
 
       if (!isValid) {
         await client.query('ROLLBACK');
